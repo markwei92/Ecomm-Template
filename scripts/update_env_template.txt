@@ -1,0 +1,11 @@
+# Copy these values to your .env file
+# Replace with the actual values from your Supabase project settings
+
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-from-supabase-dashboard
+VITE_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-from-supabase-dashboard
+
+# Keep your existing Stripe keys
+VITE_STRIPE_PUBLIC_KEY=your-existing-stripe-public-key
+VITE_STRIPE_SECRET_KEY=your-existing-stripe-secret-key
+VITE_STRIPE_WEBHOOK_SECRET=your-existing-stripe-webhook-secret

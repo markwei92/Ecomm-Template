@@ -1,0 +1,211 @@
+  return (
+    <div className="bg-white rounded-lg shadow-md p-6">
+      <h2 className="text-xl font-bold mb-6">Popup Banner Settings</h2>
+
+      {isAuthenticated === false ? (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <p>You must be logged in to manage popup banner settings.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {isLoading ? (
+            <div className="flex justify-center items-center h-40">
+              <Loader className="w-6 h-6 animate-spin text-gray-500" />
+            </div>
+          ) : (
+            <>
+              {/* Banner Preview */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-2">Preview:</h3>
+                <div className="border rounded-lg overflow-hidden p-4 bg-gray-100 relative" style={{ height: '300px' }}>
+                  <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center">
+                    <div className={`relative ${settings.layout === 'horizontal' ? 'w-[80%] max-w-xl aspect-[16/9]' :
+                      settings.layout === 'vertical' ? 'w-[40%] max-w-md aspect-[9/16]' :
+                        'w-[60%] max-w-md aspect-square'
+                      }`}>
+                      <div
+                        className={`w-full h-full overflow-hidden ${settings.rounded_edges ? 'rounded-lg' : ''} flex flex-col`}
+                        style={{ backgroundColor: settings.background_color }}
+                      >
+                        {/* Close button */}
+                        <button
+                          className="absolute top-2 right-2 z-50 p-1 bg-white bg-opacity-80 rounded-full text-black shadow-sm"
+                        >
+                          <X size={16} />
+                        </button>
+
+                        {(previewUrl || settings.image_url) && (
+                          <div className="w-full h-full relative">
+                            <img
+                              src={previewUrl || settings.image_url}
+                              alt="Banner Preview"
+                              className="w-full h-full object-cover"
+                            />
+                            {settings.content && (
+                              <div className="absolute inset-0 flex items-center justify-center p-4">
+                                <div
+                                  className="text-center"
+                                  dangerouslySetInnerHTML={{ __html: settings.content }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {!previewUrl && !settings.image_url && settings.content && (
+                          <div className="w-full h-full flex items-center justify-center p-4">
+                            <div
+                              className="text-center"
+                              dangerouslySetInnerHTML={{ __html: settings.content }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-500 mt-1">This is a preview of how the popup will appear on your homepage.</p>
+              </div>
+
+              {/* Enable/Disable Toggle */}
+              <div>
+                <label className="flex items-center cursor-pointer">
+                  <div className="mr-3">
+                    {settings.is_enabled ? (
+                      <ToggleRight className="h-6 w-6 text-green-500" />
+                    ) : (
+                      <ToggleLeft className="h-6 w-6 text-gray-400" />
+                    )}
+                  </div>
+                  <div onClick={() => setSettings({ ...settings, is_enabled: !settings.is_enabled })}>
+                    <div className="font-medium">
+                      {settings.is_enabled ? 'Popup Banner Enabled' : 'Popup Banner Disabled'}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {settings.is_enabled
+                        ? 'The popup banner will be shown to users on the homepage'
+                        : 'The popup banner is currently hidden from users'}
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              {/* Layout Options */}
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Layout:</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div
+                    className={`border p-4 rounded-lg cursor-pointer flex flex-col items-center ${settings.layout === 'square' ? 'border-black bg-gray-50' : 'border-gray-300'}`}
+                    onClick={() => setSettings({ ...settings, layout: 'square' })}
+                  >
+                    <div className="w-16 h-16 bg-gray-300 mb-2"></div>
+                    <span>Square</span>
+                    {settings.layout === 'square' && <Check className="w-4 h-4 text-green-500 mt-1" />}
+                  </div>
+                  <div
+                    className={`border p-4 rounded-lg cursor-pointer flex flex-col items-center ${settings.layout === 'horizontal' ? 'border-black bg-gray-50' : 'border-gray-300'}`}
+                    onClick={() => setSettings({ ...settings, layout: 'horizontal' })}
+                  >
+                    <div className="w-16 h-9 bg-gray-300 mb-2"></div>
+                    <span>Horizontal</span>
+                    {settings.layout === 'horizontal' && <Check className="w-4 h-4 text-green-500 mt-1" />}
+                  </div>
+                  <div
+                    className={`border p-4 rounded-lg cursor-pointer flex flex-col items-center ${settings.layout === 'vertical' ? 'border-black bg-gray-50' : 'border-gray-300'}`}
+                    onClick={() => setSettings({ ...settings, layout: 'vertical' })}
+                  >
+                    <div className="w-9 h-16 bg-gray-300 mb-2"></div>
+                    <span>Vertical</span>
+                    {settings.layout === 'vertical' && <Check className="w-4 h-4 text-green-500 mt-1" />}
+                  </div>
+                </div>
+              </div>
+
+              {/* Rounded Edges Toggle */}
+              <div>
+                <label className="flex items-center cursor-pointer">
+                  <div className="mr-3">
+                    {settings.rounded_edges ? (
+                      <ToggleRight className="h-6 w-6 text-green-500" />
+                    ) : (
+                      <ToggleLeft className="h-6 w-6 text-gray-400" />
+                    )}
+                  </div>
+                  <div onClick={() => setSettings({ ...settings, rounded_edges: !settings.rounded_edges })}>
+                    <div className="font-medium">
+                      {settings.rounded_edges ? 'Rounded Edges' : 'Square Edges'}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {settings.rounded_edges
+                        ? 'The popup banner will have rounded corners'
+                        : 'The popup banner will have square corners'}
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              {/* Background Color */}
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Background Color:</h3>
+                <div className="flex items-center">
+                  <input
+                    type="color"
+                    value={settings.background_color}
+                    onChange={(e) => setSettings({ ...settings, background_color: e.target.value })}
+                    className="w-10 h-10 rounded border border-gray-300 mr-2"
+                  />
+                  <input
+                    type="text"
+                    value={settings.background_color}
+                    onChange={(e) => setSettings({ ...settings, background_color: e.target.value })}
+                    className="border border-gray-300 rounded-md px-3 py-2 w-32"
+                  />
+                </div>
+              </div>
+
+              {/* Banner Image Upload */}
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Banner Image:</h3>
+                <div className="mb-4">
+                  {(previewUrl || settings.image_url) ? (
+                    <div className="relative w-full h-48 border rounded-lg overflow-hidden">
+                      <img
+                        src={previewUrl || settings.image_url}
+                        alt="Banner Preview"
+                        className="w-full h-full object-contain"
+                      />
+                      <button
+                        onClick={handleRemoveImage}
+                        className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600"
+                        title="Remove image"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      className="w-full h-48 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-gray-400"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <div className="text-center">
+                        <Upload className="w-8 h-8 mx-auto text-gray-400" />
+                        <p className="mt-2 text-sm text-gray-500">Click to upload an image</p>
+                      </div>
+                    </div>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};

@@ -1,0 +1,264 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Save, Loader, ToggleLeft, ToggleRight, Upload, X, Check } from 'lucide-react';
+import { toast } from 'react-toastify';
+import { supabase } from '../../lib/supabase';
+import { uploadBannerImage } from '../../services/bannerService';
+import { DraggableTextEditor } from './DraggableTextEditor';
+
+interface PopupBannerSettingsProps {
+  isAuthenticated: boolean | null;
+}
+
+interface TextElement {
+  id: string;
+  content: string;
+  position: { x: number; y: number };
+  style: {
+    fontSize: string;
+    color: string;
+    fontWeight: 'normal' | 'bold';
+  };
+  type: 'title' | 'description';
+}
+
+interface PopupBannerSettings {
+  is_enabled: boolean;
+  layout: 'square' | 'horizontal' | 'vertical';
+  rounded_edges: boolean;
+  image_url: string;
+  background_color: string;
+  content: string;
+  title?: string;
+  description?: string;
+  titleColor?: string;
+  titleSize?: string;
+  descriptionColor?: string;
+  descriptionSize?: string;
+  textElements?: TextElement[];
+}
+
+export const PopupBannerSettings: React.FC<PopupBannerSettingsProps> = ({ isAuthenticated }) => {
+  const [settings, setSettings] = useState<PopupBannerSettings>({
+    is_enabled: false,
+    layout: 'square',
+    rounded_edges: true,
+    image_url: '',
+    background_color: '#ffffff',
+    content: '',
+    title: 'Welcome to FunnyJokeTees!',
+    description: 'Check out our latest collection of funny t-shirts.',
+    titleColor: '#000000',
+    titleSize: '24px',
+    descriptionColor: '#333333',
+    descriptionSize: '16px'
+  });
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [bannerImage, setBannerImage] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch popup banner settings
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        setIsLoading(true);
+
+        const { data, error } = await supabase
+          .from('site_settings')
+          .select('setting_value')
+          .eq('setting_key', 'popup_banner')
+          .single();
+
+        if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+          console.error('Error fetching popup banner settings:', error);
+          toast.error(`Error loading popup banner settings: ${error.message}`);
+          return;
+        }
+
+        if (data) {
+          const settingsData = data.setting_value as PopupBannerSettings;
+
+          // If we have content but no title/description fields, try to parse them
+          if (settingsData.content && (!settingsData.title || !settingsData.description)) {
+            try {
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(settingsData.content, 'text/html');
+
+              // Try to extract title
+              const titleEl = doc.querySelector('h1, h2, h3');
+              if (titleEl && !settingsData.title) {
+                settingsData.title = titleEl.textContent || 'Welcome to FunnyJokeTees!';
+
+                // Extract title color
+                const titleStyle = titleEl.getAttribute('style') || '';
+                const titleColorMatch = titleStyle.match(/color:\s*([^;]+)/);
+                settingsData.titleColor = titleColorMatch ? titleColorMatch[1].trim() : '#000000';
+
+                // Extract title size
+                const titleSizeMatch = titleStyle.match(/font-size:\s*([^;]+)/);
+                settingsData.titleSize = titleSizeMatch ? titleSizeMatch[1].trim() : '24px';
+              }
+
+              // Try to extract description
+              const descEl = doc.querySelector('p');
+              if (descEl && !settingsData.description) {
+                settingsData.description = descEl.textContent || 'Check out our latest collection of funny t-shirts.';
+
+                // Extract description color
+                const descStyle = descEl.getAttribute('style') || '';
+                const descColorMatch = descStyle.match(/color:\s*([^;]+)/);
+                settingsData.descriptionColor = descColorMatch ? descColorMatch[1].trim() : '#333333';
+
+                // Extract description size
+                const descSizeMatch = descStyle.match(/font-size:\s*([^;]+)/);
+                settingsData.descriptionSize = descSizeMatch ? descSizeMatch[1].trim() : '16px';
+              }
+            } catch (error) {
+              console.error('Error parsing content:', error);
+            }
+          }
+
+          // Set default values for any missing fields
+          if (!settingsData.title) settingsData.title = 'Welcome to FunnyJokeTees!';
+          if (!settingsData.description) settingsData.description = 'Check out our latest collection of funny t-shirts.';
+          if (!settingsData.titleColor) settingsData.titleColor = '#000000';
+          if (!settingsData.titleSize) settingsData.titleSize = '24px';
+          if (!settingsData.descriptionColor) settingsData.descriptionColor = '#333333';
+          if (!settingsData.descriptionSize) settingsData.descriptionSize = '16px';
+
+          setSettings(settingsData);
+          if (settingsData.image_url) {
+            setPreviewUrl(settingsData.image_url);
+          }
+        }
+      } catch (error: any) {
+        console.error('Error fetching popup banner settings:', error);
+        toast.error(`Error loading popup banner settings: ${error.message}`);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchSettings();
+  }, []);
+
+  // Handle saving settings
+  const handleSaveSettings = async () => {
+    if (isAuthenticated === false) {
+      toast.error('You must be logged in to save settings');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+
+      // Upload image if a new one is selected
+      let updatedSettings = { ...settings };
+      if (bannerImage) {
+        try {
+          const imageUrl = await uploadBannerImage(bannerImage);
+          updatedSettings.image_url = imageUrl;
+        } catch (error: any) {
+          console.error('Error uploading banner image:', error);
+          toast.error(`Error uploading image: ${error.message}`);
+          setIsSaving(false);
+          return;
+        }
+      }
+
+      const { error } = await supabase
+        .from('site_settings')
+        .upsert({
+          setting_key: 'popup_banner',
+          setting_value: updatedSettings
+        }, {
+          onConflict: 'setting_key'
+        });
+
+      if (error) {
+        console.error('Error saving popup banner settings:', error);
+        toast.error(`Error saving popup banner settings: ${error.message}`);
+        return;
+      }
+
+      // Update local state with the new settings
+      setSettings(updatedSettings);
+      toast.success('Popup banner settings saved successfully');
+
+      // Clear the file input
+      setBannerImage(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error: any) {
+      console.error('Error saving popup banner settings:', error);
+      toast.error(`Error saving settings: ${error.message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Handle image selection
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      setBannerImage(file);
+      setPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  // Handle removing the image
+  const handleRemoveImage = () => {
+    setBannerImage(null);
+    setPreviewUrl('');
+    setSettings({
+      ...settings,
+      image_url: ''
+    });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Generate HTML content from title and description
+  const generateHtmlContent = (
+    title: string,
+    description: string,
+    titleColor: string,
+    titleSize: string,
+    descriptionColor: string,
+    descriptionSize: string,
+    textElements?: TextElement[]
+  ): string => {
+    // If we have text elements with positions, use those
+    if (textElements && textElements.length > 0) {
+      let html = '';
+      textElements.forEach(element => {
+        const style = `
+          position: absolute;
+          left: ${element.position.x}px;
+          top: ${element.position.y}px;
+          font-size: ${element.style.fontSize};
+          color: ${element.style.color};
+          font-weight: ${element.style.fontWeight};
+        `;
+        
+        if (element.type === 'title') {
+          html += `<h2 style="${style}">${element.content}</h2>`;
+        } else {
+          html += `<p style="${style}">${element.content}</p>`;
+        }
+      });
+      return html;
+    }
+    
+    // Otherwise, use the centered layout
+    return `
+      <div style="text-align: center; width: 100%; padding: 20px;">
+        <h2 style="font-size: ${titleSize}; color: ${titleColor}; margin-bottom: 10px; font-weight: bold;">${title}</h2>
+        <p style="font-size: ${descriptionSize}; color: ${descriptionColor};">${description}</p>
+      </div>
+    `;
+  };

@@ -1,0 +1,28 @@
+/* Banner and navbar styles */
+#layout-container {
+  padding-top: 0;
+}
+
+/* Container for sticky header elements */
+.sticky-header-container {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  width: 100%;
+}
+
+/* Ensure smooth transitions */
+.navbar-transition {
+  transition: top 0.3s ease-in-out;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background-color: white;
+  width: 100%;
+}
+
+/* When banner is visible, adjust navbar position */
+.navbar-transition.top-8 {
+  top: 0;
+  /* No offset needed since banner is in the sticky container */
+}

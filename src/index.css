@@ -1,0 +1,143 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Theme color variables - preloaded with defaults to prevent flashing */
+:root {
+  --navbar-bg-color: #FFFFFF;
+  --navbar-text-color: #000000;
+  --navbar-text-hover-color: #333333;
+  /* Default hover color for navbar text */
+  --navbar-icon-hover-color: #333333;
+  /* Default hover color for navbar icons */
+  --body-bg-color: #FFFFFF;
+  --footer-bg-color: #f8e8e4;
+  --footer-text-color: #4B5563;
+  --footer-button-bg-color: #9333EA;
+  --footer-button-text-color: #FFFFFF;
+  --footer-border-color: rgba(75, 85, 99, 0.2);
+  /* Default: footer-text-color with 0.2 opacity */
+}
+
+/* Apply theme colors to elements */
+.navbar-themed {
+  background-color: var(--navbar-bg-color);
+  color: var(--navbar-text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Navbar icon hover effects */
+.navbar-icon-button {
+  transition: color 0.2s ease;
+}
+
+.navbar-icon-button:hover .navbar-icon {
+  color: var(--navbar-icon-hover-color) !important;
+  transition: color 0.2s ease;
+}
+
+.navbar-icon {
+  transition: color 0.2s ease;
+}
+
+/* Footer theming */
+.footer-themed {
+  background-color: var(--footer-bg-color);
+  color: var(--footer-text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.footer-themed .footer-divider {
+  border-color: var(--footer-border-color);
+  transition: border-color 0.3s ease;
+}
+
+.footer-themed h3,
+.footer-themed h4,
+.footer-themed p,
+.footer-themed a,
+.footer-themed li {
+  color: var(--footer-text-color);
+  transition: color 0.3s ease;
+}
+
+.footer-themed .footer-button {
+  background-color: var(--footer-button-bg-color);
+  color: var(--footer-button-text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Add smooth transition for carousel */
+.carousel-slide {
+  transition: transform 300ms ease-in-out;
+}
+
+/* Ensure images fill their containers completely */
+.product-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Fix for admin header border */
+.admin-header {
+  border-bottom: 3px solid white !important;
+  box-shadow: none !important;
+  background-color: white !important;
+}
+
+/* Override Tailwind shadow-sm for admin header */
+.admin-header.shadow-sm {
+  --tw-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --tw-shadow-colored: 0 1px 2px 0 var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow) !important;
+  border-bottom: 1px solid white !important;
+}
+
+/* Custom scrollbar for filters */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 10px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Fix for layout and overflow issues */
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* Ensure responsive containers */
+.container-fluid {
+  width: 100%;
+  padding-right: 15px;
+  padding-left: 15px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+/* Fix for mobile responsiveness */
+@media (max-width: 768px) {
+  .container-fluid {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+}

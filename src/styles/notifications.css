@@ -1,0 +1,101 @@
+/* Notification badge styles */
+.notification-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  background-color: #e53e3e;
+  /* red-600 */
+  color: white;
+  font-size: 0.75rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Pulse animation removed */
+
+/* Fix table layout issues */
+table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* Fix dropdown text overflow */
+select {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Ensure dropdown options are fully visible */
+select option {
+  overflow: visible;
+  white-space: normal;
+  padding: 5px;
+}
+
+/* Specific styles for order status dropdown */
+.min-w-[140px] {
+  width: 100%;
+  max-width: 140px;
+}
+
+/* Smooth transitions for order expansion */
+tr {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Ensure order ID is fully visible */
+.break-all {
+  word-break: break-all;
+  max-width: 100%;
+  display: inline-block;
+}
+
+/* Highlight styles for new items */
+.new-item-highlight {
+  background-color: rgba(229, 62, 62, 0.25) !important;
+  /* Light red background */
+  position: relative;
+  table-layout: fixed;
+  /* Ensure table layout doesn't shift */
+  border-left: 4px solid #e53e3e !important;
+}
+
+/* Pulse background animation removed */
+
+/* Ensure consistent alignment in highlighted rows */
+.new-item-highlight td {
+  position: relative;
+  width: 100%;
+}
+
+.new-item-highlight::after {
+  content: 'NEW';
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  background-color: #e53e3e;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: bold;
+  padding: 3px 8px;
+  border-radius: 4px;
+  opacity: 1;
+  z-index: 10;
+  pointer-events: none;
+  /* Make sure it doesn't interfere with clicks */
+  width: 36px;
+  /* Fixed width to prevent layout shifts */
+  text-align: center;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* Pulse label animation removed */
