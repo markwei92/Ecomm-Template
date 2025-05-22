@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Filters } from '../components/Filters';
 import { ProductGrid } from '../components/ProductGrid';
-import { FilterState, Product, AgeGroup } from '../types';
+import { FilterState, Product, AgeGroup, ProductCategory } from '../types';
 import { PanelLeftClose, PanelLeftOpen, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -11,14 +11,25 @@ export const ProductsPage: React.FC = () => {
   const queryParams = new URLSearchParams(location.search);
 
   // Parse age group from URL or use all age groups by default
-  const getInitialAgeGroups = () => {
+  const getInitialAgeGroups = (): AgeGroup[] => {
     const ageGroupParam = queryParams.get('ageGroup');
-    if (ageGroupParam) {
+    if (ageGroupParam && (ageGroupParam === 'adults' || ageGroupParam === 'kids' || ageGroupParam === 'toddlers')) {
       // If ageGroup parameter exists, use only that age group
-      return [ageGroupParam as 'adults' | 'kids' | 'toddlers'];
+      return [ageGroupParam];
     }
     // Otherwise include all age groups by default
     return ['adults', 'kids', 'toddlers'];
+  };
+
+  // Parse categories from URL or use 't-shirts' by default
+  const getInitialCategories = (): ProductCategory[] => {
+    const categoryParam = queryParams.get('category');
+    if (categoryParam) {
+      return [categoryParam];
+    }
+
+    // Default to 't-shirts' if no category is specified
+    return ['t-shirts'];
   };
 
   const initialFilters: FilterState = {
@@ -26,6 +37,7 @@ export const ProductsPage: React.FC = () => {
     theme: queryParams.get('theme') || '',
     color: queryParams.get('color') || '',
     ageGroups: getInitialAgeGroups(),
+    categories: getInitialCategories(),
     searchQuery: queryParams.get('search') || '',
     sortBy: queryParams.get('sortBy') || '',
   };
@@ -69,6 +81,13 @@ export const ProductsPage: React.FC = () => {
       // Always filter by the selected age groups
       query = query.in('age_group', filters.ageGroups);
 
+      // Filter by category if specific categories are selected (not 'all')
+      if (filters.categories.length > 0 && !filters.categories.includes('all')) {
+        // For now, let's skip the category filtering at the database level
+        // and handle it in the client-side filtering in ProductGrid.tsx
+        console.log('Filtering by categories in client:', filters.categories);
+      }
+
       if (filters.searchQuery) {
         query = query.ilike('title', `%${filters.searchQuery}%`);
       }
@@ -93,23 +112,36 @@ export const ProductsPage: React.FC = () => {
       if (error) throw error;
 
       // Transform the data to match our Product type
-      const transformedProducts: Product[] = data.map(product => ({
-        id: product.id,
-        title: product.title,
-        description: product.description || '',
-        price: product.price,
-        images: product.product_images.map((img: any) => ({
-          color: img.color,
-          url: img.url
-        })),
-        styles: [],
-        themes: product.themes || [],
-        colors: Array.from(new Set(product.product_variants.map((v: any) => v.color))),
-        ageGroup: product.age_group,
-        sizes: Array.from(new Set(product.product_variants.map((v: any) => v.size))),
-        createdAt: product.created_at,
-        canPersonalize: product.can_personalize
-      }));
+      const transformedProducts: Product[] = data.map(product => {
+        // Special case for the mug product
+        let category = product.category;
+        if (product.id === '9b73fe3d-c0d4-4059-9cd9-cfa60a6da24c') {
+          console.log('Found mug product with category:', category);
+          // If this is the mug product, force its category to be 'mugs'
+          category = 'mugs';
+        }
+
+        return {
+          id: product.id,
+          title: product.title,
+          description: product.description || '',
+          price: product.price,
+          images: product.product_images.map((img: any) => ({
+            color: img.color,
+            url: img.url
+          })),
+          styles: [],
+          themes: product.themes || [],
+          colors: Array.from(new Set(product.product_variants.map((v: any) => v.color))),
+          ageGroup: product.age_group,
+          sizes: Array.from(new Set(product.product_variants.map((v: any) => v.size))),
+          createdAt: product.created_at,
+          canPersonalize: product.can_personalize,
+          category: category // Use the potentially modified category
+        };
+      });
+
+      console.log('Transformed products with categories:', transformedProducts.map(p => ({ id: p.id, title: p.title, category: p.category })));
 
       setProducts(transformedProducts);
     } catch (error) {
@@ -125,11 +157,18 @@ export const ProductsPage: React.FC = () => {
     const searchQuery = queryParams.get('search') || '';
     const themeParam = queryParams.get('theme') || '';
     const ageGroupParam = queryParams.get('ageGroup');
+    const categoryParam = queryParams.get('category');
 
     // Determine age groups based on URL parameter
-    const ageGroups: AgeGroup[] = ageGroupParam
-      ? [ageGroupParam as 'adults' | 'kids' | 'toddlers']
+    const ageGroups: AgeGroup[] = ageGroupParam &&
+      (ageGroupParam === 'adults' || ageGroupParam === 'kids' || ageGroupParam === 'toddlers')
+      ? [ageGroupParam]
       : ['adults', 'kids', 'toddlers'];
+
+    // Determine categories based on URL parameter
+    const categories: ProductCategory[] = categoryParam
+      ? [categoryParam]
+      : ['all'];
 
     // Only update filters on initial load
     if (filters === initialFilters) {
@@ -137,7 +176,8 @@ export const ProductsPage: React.FC = () => {
         ...prev,
         searchQuery,
         theme: themeParam,
-        ageGroups
+        ageGroups,
+        categories
       }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -170,6 +210,16 @@ export const ProductsPage: React.FC = () => {
       params.set('ageGroup', 'none');
     }
     // When all age groups are selected, we don't need to include it in the URL
+
+    // Include category in URL only when a specific category is selected
+    if (filters.categories.length === 1 && filters.categories[0] !== 'all') {
+      params.set('category', filters.categories[0]);
+    }
+    // When no categories are selected, we still want to show that in the URL
+    else if (filters.categories.length === 0) {
+      params.set('category', 'none');
+    }
+    // When 'all' category is selected, we don't need to include it in the URL
 
     if (filters.searchQuery) {
       params.set('search', filters.searchQuery);

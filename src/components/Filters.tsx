@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FilterState, Theme, AgeGroup } from '../types';
+import { FilterState, Theme, AgeGroup, ProductCategory } from '../types';
 import { X, ChevronDown, ChevronUp, Loader } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -92,7 +92,60 @@ export const Filters: React.FC<FiltersProps> = ({ filters, onFilterChange }) => 
     fetchThemes();
   }, []);
 
+  // Fetch categories from database
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setIsLoadingCategories(true);
+
+        // Fetch categories from the product_categories table
+        console.log('Fetching product categories from database...');
+        const { data, error } = await supabase
+          .from('product_categories')
+          .select('id, name, slug')
+          .order('created_at');
+
+        console.log('Product categories fetched:', data);
+
+        if (error) {
+          // If the error is related to the table not existing, we'll handle it gracefully
+          if (error.message.includes('does not exist') || error.message.includes('schema')) {
+            console.log('Product categories table does not exist yet. Using default categories.');
+            setCategories(['all', 't-shirts']);
+            return;
+          }
+          throw error;
+        }
+
+        // Always include 'all' as the first option
+        const categoryList: ProductCategory[] = ['all'];
+
+        // Add categories from database
+        if (data && data.length > 0) {
+          data.forEach(category => {
+            categoryList.push(category.slug as ProductCategory);
+          });
+        } else {
+          // If no categories found, add 't-shirts' as default
+          categoryList.push('t-shirts');
+        }
+
+        setCategories(categoryList);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        // Fallback to default categories if there's an error
+        setCategories(['all', 't-shirts']);
+      } finally {
+        setIsLoadingCategories(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
   const ageGroups: AgeGroup[] = ['adults', 'kids', 'toddlers'];
+  const [categories, setCategories] = useState<ProductCategory[]>(['all', 't-shirts']);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
 
   const handleChange = (key: keyof FilterState, value: any) => {
     onFilterChange({ ...filters, [key]: value });
@@ -111,12 +164,33 @@ export const Filters: React.FC<FiltersProps> = ({ filters, onFilterChange }) => 
     handleChange('ageGroups', newAgeGroups);
   };
 
+  const handleCategoryToggle = (category: ProductCategory) => {
+    const newCategories = filters.categories.includes(category)
+      ? filters.categories.filter(cat => cat !== category)
+      : [...filters.categories, category];
+
+    console.log('Category toggled:', category, 'New categories:', newCategories);
+
+    // Special handling for 'all' category
+    if (category === 'all' && newCategories.includes('all')) {
+      // If 'all' is selected, deselect other categories
+      handleChange('categories', ['all']);
+    } else if (newCategories.includes('all') && newCategories.length > 1) {
+      // If 'all' is already selected and another category is selected, deselect 'all'
+      handleChange('categories', newCategories.filter(cat => cat !== 'all'));
+    } else {
+      // Normal case
+      handleChange('categories', newCategories);
+    }
+  };
+
   const clearFilters = () => {
     onFilterChange({
       styles: [],
       theme: '',
       color: '',
       ageGroups: ['adults', 'kids', 'toddlers'], // Include all age groups by default
+      categories: ['t-shirts'], // Set T-Shirts as the default category
       searchQuery: '',
       sortBy: '',
     });
@@ -205,6 +279,30 @@ export const Filters: React.FC<FiltersProps> = ({ filters, onFilterChange }) => 
               </span>
             </label>
           ))}
+        </div>
+      </FilterSection>
+
+      <FilterSection title="Category">
+        <div className="grid grid-cols-1 gap-2">
+          {isLoadingCategories ? (
+            <div className="flex justify-center items-center py-4">
+              <Loader className="w-5 h-5 animate-spin text-gray-500" />
+            </div>
+          ) : (
+            categories.map(category => (
+              <label key={category} className="flex items-center group cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filters.categories.includes(category)}
+                  onChange={() => handleCategoryToggle(category)}
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 rounded transition-colors duration-200"
+                />
+                <span className="ml-2 capitalize group-hover:text-gray-900 transition-colors duration-200">
+                  {category === 'all' ? 'All Products' : category === 't-shirts' ? 'T-Shirts' : category.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                </span>
+              </label>
+            ))
+          )}
         </div>
       </FilterSection>
 
