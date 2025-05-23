@@ -106,6 +106,7 @@ export const Filters: React.FC<FiltersProps> = ({ filters, onFilterChange }) => 
           .order('created_at');
 
         console.log('Product categories fetched:', data);
+        console.log('🔍 CATEGORIES DEBUG - Raw data from database:', JSON.stringify(data, null, 2));
 
         if (error) {
           // If the error is related to the table not existing, we'll handle it gracefully
@@ -130,6 +131,7 @@ export const Filters: React.FC<FiltersProps> = ({ filters, onFilterChange }) => 
           categoryList.push('t-shirts');
         }
 
+        console.log('🔍 CATEGORIES DEBUG - Final category list being set:', categoryList);
         setCategories(categoryList);
       } catch (error) {
         console.error('Error fetching categories:', error);
