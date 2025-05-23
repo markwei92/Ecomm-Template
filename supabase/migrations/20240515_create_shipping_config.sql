@@ -20,7 +20,7 @@ SELECT create_shipping_config_table();
 
 -- Insert default values if the table is empty
 INSERT INTO shipping_config (base_shipping_cost, additional_item_cost)
-SELECT 400, 100
+SELECT 500, 250
 WHERE NOT EXISTS (SELECT 1 FROM shipping_config);
 
 -- Grant access to the table

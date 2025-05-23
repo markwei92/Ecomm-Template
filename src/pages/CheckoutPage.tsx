@@ -8,6 +8,7 @@ import { toast } from 'react-toastify';
 import { supabase } from '../lib/supabase';
 import { createOrderFromPaymentIntent, debugStripeOrdersTable } from '../lib/orders';
 import { StripeCheckoutWrapper } from '../components/StripeCheckoutWrapper';
+import { getShippingConfig } from '../api/shipping-proxy';
 
 export const CheckoutPage: React.FC = () => {
   const { state, dispatch } = useCart();
@@ -15,7 +16,7 @@ export const CheckoutPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [shippingCost, setShippingCost] = useState({ base_price: 5.00, additional_item_price: 2.50 });
+  const [shippingCost, setShippingCost] = useState({ base_shipping_cost: 500, additional_item_cost: 250 });
   const [isLoadingShipping, setIsLoadingShipping] = useState(true);
   const [paymentIntent, setPaymentIntent] = useState<PaymentIntentResponse | null>(null);
   const [promoCode, setPromoCode] = useState('');
@@ -37,20 +38,13 @@ export const CheckoutPage: React.FC = () => {
   useEffect(() => {
     const fetchShippingCost = async () => {
       try {
-        const { data, error } = await supabase
-          .from('settings')
-          .select('value')
-          .eq('key', 'shipping_price')
-          .single();
+        const config = await getShippingConfig();
+        console.log('Fetched shipping config from shipping-config function:', config);
 
-        if (error) throw error;
-
-        if (data) {
-          // The settings table stores shipping costs as dollar amounts (e.g., 5.00, 2.50)
-          // not as cents, so we use them directly
-          setShippingCost(data.value);
-          console.log('Fetched shipping cost from settings:', data.value);
-        }
+        setShippingCost({
+          base_shipping_cost: config.base_shipping_cost,
+          additional_item_cost: config.additional_item_cost
+        });
       } catch (error) {
         console.error('Error fetching shipping cost:', error);
         // Keep default values if fetch fails
@@ -65,9 +59,10 @@ export const CheckoutPage: React.FC = () => {
   const calculateShipping = () => {
     if (state.items.length === 0) return 0;
     const totalItems = state.items.reduce((sum, item) => sum + item.quantity, 0);
-    // Calculate shipping in dollars - settings table stores values as dollars, not cents
-    const shippingAmount = shippingCost.base_price + (Math.max(0, totalItems - 1) * shippingCost.additional_item_price);
-    console.log(`SHIPPING CALCULATION: Base price: $${shippingCost.base_price}, Additional price: $${shippingCost.additional_item_price}, Total items: ${totalItems}, Final shipping: $${shippingAmount}`);
+    // Calculate shipping in dollars - shipping config stores values in cents, so convert to dollars
+    const shippingAmountCents = shippingCost.base_shipping_cost + (Math.max(0, totalItems - 1) * shippingCost.additional_item_cost);
+    const shippingAmount = shippingAmountCents / 100; // Convert from cents to dollars
+    console.log(`SHIPPING CALCULATION: Base price: $${shippingCost.base_shipping_cost / 100}, Additional price: $${shippingCost.additional_item_cost / 100}, Total items: ${totalItems}, Final shipping: $${shippingAmount}`);
     return shippingAmount;
   };
 

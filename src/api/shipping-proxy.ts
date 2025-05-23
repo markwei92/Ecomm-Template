@@ -1,10 +1,10 @@
 // Local proxy for shipping configuration and address updates to avoid CORS issues
 import { supabase } from '../lib/supabase';
 
-// Default shipping configuration
+// Default shipping configuration - matches the migration and admin defaults
 const DEFAULT_CONFIG = {
-  base_shipping_cost: 400, // $4.00 in cents
-  additional_item_cost: 100, // $1.00 in cents
+  base_shipping_cost: 500, // $5.00 in cents (matches migration default)
+  additional_item_cost: 250, // $2.50 in cents (matches admin settings default)
   source: 'local-fallback'
 };
 
@@ -69,14 +69,36 @@ export async function updateShippingAddress(shippingAddress: any) {
 }
 
 /**
- * Get shipping configuration
- * This function no longer tries to access the database and just returns default values
+ * Get shipping configuration from Supabase function
  */
 export async function getShippingConfig() {
-  console.log('Local proxy - Using hardcoded shipping config');
+  try {
+    console.log('Local proxy - Fetching shipping config from Supabase function');
 
-  // Just return the default config directly
-  return DEFAULT_CONFIG;
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/shipping-config`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch shipping configuration');
+    }
+
+    const data = await response.json();
+    console.log('Local proxy - Fetched shipping config:', data);
+
+    return {
+      base_shipping_cost: data.base_shipping_cost,
+      additional_item_cost: data.additional_item_cost,
+      source: data.source || 'supabase-function'
+    };
+  } catch (error) {
+    console.error('Local proxy - Error fetching shipping config, using defaults:', error);
+    return DEFAULT_CONFIG;
+  }
 }
 
 /**

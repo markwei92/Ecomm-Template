@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { getShippingConfig } from '../api/shipping-proxy';
 
 interface CartDropdownProps {
   isOpen: boolean;
@@ -14,6 +15,30 @@ export const CartDropdown: React.FC<CartDropdownProps> = ({ isOpen, onClose }) =
   const { state, dispatch } = useCart();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [shippingConfig, setShippingConfig] = useState({ base_shipping_cost: 500, additional_item_cost: 250 });
+
+  useEffect(() => {
+    const fetchShippingConfig = async () => {
+      try {
+        const config = await getShippingConfig();
+        setShippingConfig({
+          base_shipping_cost: config.base_shipping_cost,
+          additional_item_cost: config.additional_item_cost
+        });
+      } catch (error) {
+        console.error('Error fetching shipping config in cart dropdown:', error);
+      }
+    };
+
+    fetchShippingConfig();
+  }, []);
+
+  const calculateShipping = () => {
+    if (state.items.length === 0) return 0;
+    const totalItems = state.items.reduce((sum, item) => sum + item.quantity, 0);
+    const shippingAmountCents = shippingConfig.base_shipping_cost + (Math.max(0, totalItems - 1) * shippingConfig.additional_item_cost);
+    return shippingAmountCents / 100; // Convert from cents to dollars
+  };
 
   const updateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) {
@@ -155,9 +180,14 @@ export const CartDropdown: React.FC<CartDropdownProps> = ({ isOpen, onClose }) =
                 <p>Subtotal</p>
                 <p>${totalAmount.toFixed(2)}</p>
               </div>
-              <p className="mt-0.5 text-sm text-gray-500">
-                Shipping and taxes calculated at checkout
-              </p>
+              <div className="flex justify-between text-sm text-gray-600 mt-1">
+                <p>Shipping</p>
+                <p>${calculateShipping().toFixed(2)}</p>
+              </div>
+              <div className="flex justify-between text-base font-medium text-gray-900 mt-2 pt-2 border-t border-gray-100">
+                <p>Total</p>
+                <p>${(totalAmount + calculateShipping()).toFixed(2)}</p>
+              </div>
               <div className="mt-4 space-y-2">
                 <button
                   onClick={handleCheckout}

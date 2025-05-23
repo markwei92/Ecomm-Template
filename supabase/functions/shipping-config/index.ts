@@ -17,10 +17,10 @@ function corsResponse(body: any, status = 200) {
   });
 }
 
-// Default shipping configuration
+// Default shipping configuration - matches the migration defaults
 const DEFAULT_CONFIG = {
-  base_shipping_cost: 400, // $4.00 in cents
-  additional_item_cost: 100, // $1.00 in cents
+  base_shipping_cost: 500, // $5.00 in cents (matches migration default)
+  additional_item_cost: 250, // $2.50 in cents (matches admin settings default)
 };
 
 serve(async (req) => {
@@ -45,31 +45,31 @@ serve(async (req) => {
 
       if (error) {
         console.error('Error fetching shipping config:', error);
-        
+
         // If the table doesn't exist, create it with default values
         if (error.code === 'PGRST116' || error.message.includes('relation "shipping_config" does not exist')) {
           try {
             // Create the table
             await supabase.rpc('create_shipping_config_table');
-            
+
             // Insert default values
             const { data: insertData, error: insertError } = await supabase
               .from('shipping_config')
               .insert([DEFAULT_CONFIG])
               .select();
-              
+
             if (insertError) {
               console.error('Error inserting default shipping config:', insertError);
               return corsResponse({ ...DEFAULT_CONFIG, source: 'default' });
             }
-            
+
             return corsResponse({ ...insertData[0], source: 'new_table' });
           } catch (createError) {
             console.error('Error creating shipping config table:', createError);
             return corsResponse({ ...DEFAULT_CONFIG, source: 'default' });
           }
         }
-        
+
         return corsResponse({ ...DEFAULT_CONFIG, source: 'default' });
       }
 
@@ -80,12 +80,12 @@ serve(async (req) => {
           .from('shipping_config')
           .insert([DEFAULT_CONFIG])
           .select();
-          
+
         if (insertError) {
           console.error('Error inserting default shipping config:', insertError);
           return corsResponse({ ...DEFAULT_CONFIG, source: 'default' });
         }
-        
+
         return corsResponse({ ...insertData[0], source: 'inserted' });
       }
 
@@ -93,34 +93,63 @@ serve(async (req) => {
     } else if (req.method === 'POST') {
       // Update the shipping configuration
       const requestData = await req.json();
-      
+
       // Validate the input
       const baseShippingCost = parseInt(requestData.base_shipping_cost);
       const additionalItemCost = parseInt(requestData.additional_item_cost);
-      
+
       if (isNaN(baseShippingCost) || isNaN(additionalItemCost)) {
         return corsResponse({ error: 'Invalid shipping cost values' }, 400);
       }
-      
-      // Try to update the shipping configuration
-      const { data, error } = await supabase
+
+      // First, try to get existing configuration
+      const { data: existingData, error: fetchError } = await supabase
         .from('shipping_config')
-        .insert([{
-          base_shipping_cost: baseShippingCost,
-          additional_item_cost: additionalItemCost,
-          updated_at: new Date().toISOString()
-        }])
-        .select();
-        
+        .select('id')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let data, error;
+
+      if (existingData) {
+        // Update existing record
+        const updateResult = await supabase
+          .from('shipping_config')
+          .update({
+            base_shipping_cost: baseShippingCost,
+            additional_item_cost: additionalItemCost,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingData.id)
+          .select();
+
+        data = updateResult.data;
+        error = updateResult.error;
+      } else {
+        // Insert new record if none exists
+        const insertResult = await supabase
+          .from('shipping_config')
+          .insert([{
+            base_shipping_cost: baseShippingCost,
+            additional_item_cost: additionalItemCost,
+            updated_at: new Date().toISOString()
+          }])
+          .select();
+
+        data = insertResult.data;
+        error = insertResult.error;
+      }
+
       if (error) {
         console.error('Error updating shipping config:', error);
-        
+
         // If the table doesn't exist, create it
         if (error.code === 'PGRST116' || error.message.includes('relation "shipping_config" does not exist')) {
           try {
             // Create the table
             await supabase.rpc('create_shipping_config_table');
-            
+
             // Try again
             const { data: insertData, error: insertError } = await supabase
               .from('shipping_config')
@@ -130,19 +159,19 @@ serve(async (req) => {
                 updated_at: new Date().toISOString()
               }])
               .select();
-              
+
             if (insertError) {
               console.error('Error inserting shipping config after table creation:', insertError);
               return corsResponse({ error: 'Failed to update shipping configuration' }, 500);
             }
-            
+
             return corsResponse({ success: true, data: insertData[0] });
           } catch (createError) {
             console.error('Error creating shipping config table:', createError);
             return corsResponse({ error: 'Failed to create shipping configuration table' }, 500);
           }
         }
-        
+
         return corsResponse({ error: 'Failed to update shipping configuration' }, 500);
       }
 
