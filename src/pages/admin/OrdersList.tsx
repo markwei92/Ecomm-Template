@@ -264,6 +264,13 @@ export const OrdersList: React.FC = () => {
 
       console.log('Orders data retrieved:', ordersData ? ordersData.length : 0, 'orders found');
 
+      // Debug: Log the first order to see its structure
+      if (ordersData && ordersData.length > 0) {
+        console.log('First order structure:', ordersData[0]);
+        console.log('First order items field:', ordersData[0].items);
+        console.log('First order items type:', typeof ordersData[0].items);
+      }
+
       // Check if we have any orders
       if (!ordersData || ordersData.length === 0) {
         console.log('No orders found, returning empty array');
@@ -1086,26 +1093,36 @@ export const OrdersList: React.FC = () => {
                                 <h4 className="text-sm font-medium text-gray-900 mb-2">Order Items:</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                   {(() => {
-                                    // Handle different formats of order.items
-                                    let items = order.items;
+                                    // Parse order items - they're stored in order.items.items
+                                    let items = [];
 
-                                    // If items is a string, try to parse it as JSON
-                                    if (typeof items === 'string') {
-                                      try {
-                                        items = JSON.parse(items);
-                                      } catch (e) {
-                                        console.error('Failed to parse items JSON:', e);
-                                        items = [];
+                                    if (order.items) {
+                                      // Check if items is an object with an items property
+                                      const itemsData = order.items as any;
+                                      if (typeof itemsData === 'object' && itemsData.items && Array.isArray(itemsData.items)) {
+                                        items = itemsData.items;
+                                      }
+                                      // Fallback: if items is directly an array
+                                      else if (Array.isArray(order.items)) {
+                                        items = order.items;
+                                      }
+                                      // Fallback: if items is a JSON string
+                                      else if (typeof order.items === 'string') {
+                                        try {
+                                          const parsed = JSON.parse(order.items);
+                                          if (Array.isArray(parsed)) {
+                                            items = parsed;
+                                          } else if (parsed.items && Array.isArray(parsed.items)) {
+                                            items = parsed.items;
+                                          }
+                                        } catch (e) {
+                                          console.error('Failed to parse items JSON:', e);
+                                        }
                                       }
                                     }
 
-                                    // Ensure items is an array
-                                    if (!Array.isArray(items)) {
-                                      items = [];
-                                    }
-
                                     return items && items.length > 0 ? (
-                                      items.map((item, index) => (
+                                      items.map((item: any, index: number) => (
                                         <div key={index} className="border border-gray-200 rounded p-3 bg-white">
                                           <div className="flex items-start">
                                             {item.image && (
@@ -1152,46 +1169,57 @@ export const OrdersList: React.FC = () => {
                                   <div className="text-right">
                                     {/* Calculate subtotal based on item prices */}
                                     {(() => {
-                                      // Parse items if they're stored as JSON string
-                                      let parsedItems = order.items;
-                                      if (typeof parsedItems === 'string') {
-                                        try {
-                                          parsedItems = JSON.parse(parsedItems);
-                                        } catch (e) {
-                                          parsedItems = [];
+                                      // Parse items and discount info from order.items object
+                                      let parsedItems = [];
+                                      let discountInfo = null;
+
+                                      if (order.items) {
+                                        // Extract items and discount info from the order.items object
+                                        const itemsData = order.items as any;
+                                        if (typeof itemsData === 'object' && itemsData.items && Array.isArray(itemsData.items)) {
+                                          parsedItems = itemsData.items;
+                                          discountInfo = itemsData.discount_info;
                                         }
-                                      }
-                                      if (!Array.isArray(parsedItems)) {
-                                        parsedItems = [];
+                                        // Fallback for other formats
+                                        else if (Array.isArray(order.items)) {
+                                          parsedItems = order.items;
+                                        }
+                                        else if (typeof order.items === 'string') {
+                                          try {
+                                            const parsed = JSON.parse(order.items);
+                                            if (Array.isArray(parsed)) {
+                                              parsedItems = parsed;
+                                            } else if (parsed.items && Array.isArray(parsed.items)) {
+                                              parsedItems = parsed.items;
+                                              discountInfo = parsed.discount_info;
+                                            }
+                                          } catch (e) {
+                                            parsedItems = [];
+                                          }
+                                        }
                                       }
 
                                       // Calculate the original subtotal from items
-                                      const itemsTotal = parsedItems.reduce((sum, item) => {
+                                      const itemsTotal = parsedItems.reduce((sum: number, item: any) => {
                                         const itemPrice = typeof item.price === 'number' ? item.price : 0;
-                                        return sum + (itemPrice * item.quantity);
+                                        const quantity = typeof item.quantity === 'number' ? item.quantity : 1;
+                                        return sum + (itemPrice * quantity);
                                       }, 0) || 0;
+
+                                      // Get discount information
+                                      let discount = 0;
+                                      let discountPercentage = 0;
+
+                                      if (discountInfo) {
+                                        discount = (discountInfo.discount_amount || 0) / 100; // Convert from cents
+                                        discountPercentage = discountInfo.discount_percentage || 0;
+                                      }
 
                                       // Get the shipping cost - convert from cents to dollars
                                       const shippingCost = (order.shipping_cost || 0) / 100;
 
-                                      // Check if there's a discount by comparing total with items + shipping
+                                      // Get total from database
                                       const totalFromDB = (order.amount_total || 0) / 100;
-                                      const calculatedTotal = itemsTotal + shippingCost;
-                                      const discrepancy = Math.abs(calculatedTotal - totalFromDB);
-
-                                      // If there's a significant discrepancy, assume a discount was applied
-                                      let discount = 0;
-                                      let discountPercentage = 0;
-
-                                      if (discrepancy > 0.01) { // More than 1 cent difference
-                                        discount = calculatedTotal - totalFromDB;
-                                        if (discount > 0 && itemsTotal > 0) {
-                                          discountPercentage = Math.round((discount / itemsTotal) * 100);
-                                        }
-                                      }
-
-                                      // Calculate discounted subtotal (not displayed separately)
-                                      // const discountedSubtotal = itemsTotal - discount;
 
                                       return (
                                         <>
