@@ -15,8 +15,6 @@ let toastEnabled = true;
 export const setToastEnabled = (enabled: boolean) => {
   console.log(`Toast notifications being set to: ${enabled ? 'enabled' : 'disabled'}`);
   toastEnabled = enabled;
-  // Force to true for debugging
-  toastEnabled = true;
   console.log(`Toast notifications are now: ${toastEnabled ? 'enabled' : 'disabled'}`);
 };
 

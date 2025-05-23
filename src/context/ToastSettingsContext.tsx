@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
-import { toast } from 'react-toastify';
-import { setToastEnabled } from '../utils/toastInterceptor';
+import toast, { setToastEnabled } from '../utils/toastInterceptor';
 
 interface ToastSettings {
   enabled: boolean;
@@ -33,10 +32,6 @@ export const ToastSettingsProvider: React.FC<ToastSettingsProviderProps> = ({ ch
 
   useEffect(() => {
     console.log('ToastSettingsProvider initialized');
-
-    // Force enable toast notifications for debugging
-    setToastEnabled(true);
-    console.log('Toast notifications forcibly enabled for debugging');
 
     const fetchToastSettings = async () => {
       try {
