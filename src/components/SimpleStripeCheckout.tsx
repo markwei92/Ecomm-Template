@@ -437,7 +437,6 @@ const SimpleCheckoutForm: React.FC<{
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <h3 className="text-sm font-medium text-gray-700 mb-2">Email</h3>
         <LinkAuthenticationElement
           options={{
             defaultValues: {

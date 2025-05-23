@@ -1,9 +1,10 @@
-# Discount Display Format & Shipping Cost Fix
+# E-commerce Display Fixes Documentation
 
 ## Overview
-Fixed two display issues in the e-commerce application:
+Fixed multiple display issues in the e-commerce application:
 1. **Discount Display Format**: Changed from `-$2.40 (10%)` to `(10%) -$2.40` format
 2. **Shipping Cost Display**: Fixed shipping costs showing as `0.0y` instead of `y.00`
+3. **Stripe Payment Page**: Removed shipping cost notification and duplicate Email headers
 
 ## Issue Description
 
@@ -12,6 +13,10 @@ The discount information was displaying with the percentage after the price valu
 
 ### Shipping Cost Issue
 After the discount fix, shipping costs were displaying as `0.0y` instead of `y.00` across checkout, success, and user orders pages. This was caused by incorrect handling of shipping cost values from the settings table.
+
+### Stripe Payment Page Issues
+1. **Shipping Cost Notification**: Unnecessary notification text "Note: The shipping cost will be applied correctly during payment processing."
+2. **Duplicate Email Headers**: Manual "Email" headers above `LinkAuthenticationElement` components created duplicate labels since Stripe automatically provides its own Email label.
 
 ## Root Cause Analysis
 
@@ -30,7 +35,89 @@ The problem was in `CheckoutPage.tsx` where the shipping calculation was incorre
 
 ## Files Modified
 
-### 1. CheckoutPage.tsx (Shipping Cost Fix)
+### 1. CustomShippingDisplay.tsx (Remove Shipping Notification)
+**Location:** `src/components/CustomShippingDisplay.tsx`
+**Lines Modified:** 14-16
+
+**Before:**
+```tsx
+<div className="mt-1 text-xs text-gray-500">
+  <span className="italic">Note: The shipping cost will be applied correctly during payment processing.</span>
+</div>
+```
+
+**After:**
+```tsx
+// Removed the notification div entirely
+```
+
+### 2. SimpleStripeCheckout.tsx (Remove Duplicate Email Header)
+**Location:** `src/components/SimpleStripeCheckout.tsx`
+**Lines Modified:** 440
+
+**Before:**
+```tsx
+<div>
+  <h3 className="text-sm font-medium text-gray-700 mb-2">Email</h3>
+  <LinkAuthenticationElement
+    options={{
+      defaultValues: {
+        email: userData?.email || '',
+      },
+    }}
+    onChange={(e) => setEmail(e.value.email)}
+  />
+</div>
+```
+
+**After:**
+```tsx
+<div>
+  <LinkAuthenticationElement
+    options={{
+      defaultValues: {
+        email: userData?.email || '',
+      },
+    }}
+    onChange={(e) => setEmail(e.value.email)}
+  />
+</div>
+```
+
+### 3. DirectStripeCheckout.tsx (Remove Duplicate Email Header)
+**Location:** `src/components/DirectStripeCheckout.tsx`
+**Lines Modified:** 303
+
+**Before:**
+```tsx
+<div>
+  <h3 className="text-sm font-medium text-gray-700 mb-2">Email</h3>
+  <LinkAuthenticationElement
+    options={{
+      defaultValues: {
+        email: userData?.email || '',
+      },
+    }}
+    onChange={(e) => setEmail(e.value.email)}
+  />
+</div>
+```
+
+**After:**
+```tsx
+<div>
+  <LinkAuthenticationElement
+    options={{
+      defaultValues: {
+        email: userData?.email || '',
+      },
+    }}
+    onChange={(e) => setEmail(e.value.email)}
+  />
+</div>
+```
+
+### 4. CheckoutPage.tsx (Shipping Cost Fix)
 **Location:** `src/pages/CheckoutPage.tsx`
 **Lines Modified:** 18, 49-52, 65-71
 
@@ -131,6 +218,12 @@ const shippingAmount = shippingCost.base_price + (Math.max(0, totalItems - 1) * 
 
 ## Implementation Details
 
+### Stripe Payment Page Fixes
+1. **Removed shipping notification**: Eliminated unnecessary explanatory text that could undermine customer confidence
+2. **Fixed duplicate Email headers**: Removed manual headers since `LinkAuthenticationElement` provides its own label
+3. **Improved UI cleanliness**: Streamlined payment form appearance
+4. **Maintained functionality**: All form validation and submission logic preserved
+
 ### Shipping Cost Fix
 1. **Updated default values** from cents (400, 100) to dollars (5.00, 2.50)
 2. **Removed incorrect division** by 100 in `calculateShipping()` function
@@ -145,6 +238,12 @@ const shippingAmount = shippingCost.base_price + (Math.max(0, totalItems - 1) * 
 
 ## Testing Recommendations
 
+### Stripe Payment Page Testing
+1. **Navigate to checkout** and verify no shipping cost notification appears
+2. **Check Email field** has only one "Email" label (from Stripe, not duplicate)
+3. **Test form submission** to ensure all functionality still works
+4. **Verify autofill** for logged-in users works correctly
+
 ### Shipping Cost Testing
 1. **Add items to cart** and verify shipping shows correct amount (e.g., $5.00 for 1 item, $7.50 for 2 items)
 2. **Complete checkout** and verify shipping cost displays correctly on success page
@@ -157,19 +256,22 @@ const shippingAmount = shippingCost.base_price + (Math.max(0, totalItems - 1) * 
 3. **Test with different discount types** (percentage vs fixed amount)
 
 ## Technical Notes
+- **Stripe Elements**: `LinkAuthenticationElement` automatically provides its own Email label
+- **UI Best Practices**: Removed redundant explanatory text that could undermine customer confidence
 - **Shipping costs**: Settings table stores as dollars, database stores as cents, display converts back to dollars
 - **Discount display**: Only affects visual format, not calculation logic
 - **Backward compatibility**: All existing orders continue to display correctly
 - **Data consistency**: No database migrations required
 
 ## Related Files (Not Modified)
+- `StripeElementsCheckout.tsx` - Already correctly implemented without duplicate Email header
 - Database shipping cost storage logic (unchanged)
-- Stripe payment processing (unchanged)
-- Other shipping cost calculation functions (already correct)
+- Stripe payment processing logic (unchanged)
+- Form validation and submission logic (unchanged)
 
 ## Commit Information
 - **Branch**: clean-branch
-- **Files Changed**: 4 files
-- **Lines Modified**: ~25 lines total
-- **Type**: Bug fix + UI improvement
-- **Impact**: Fixes display issues, no functional changes
+- **Files Changed**: 6 files (3 new fixes + previous fixes)
+- **Lines Modified**: ~35 lines total
+- **Type**: UI/UX improvements + Bug fixes
+- **Impact**: Cleaner payment UI, fixes display issues, no functional changes
