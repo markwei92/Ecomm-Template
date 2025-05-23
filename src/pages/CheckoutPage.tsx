@@ -15,7 +15,7 @@ export const CheckoutPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [shippingCost, setShippingCost] = useState({ base_price: 400, additional_item_price: 100 });
+  const [shippingCost, setShippingCost] = useState({ base_price: 5.00, additional_item_price: 2.50 });
   const [isLoadingShipping, setIsLoadingShipping] = useState(true);
   const [paymentIntent, setPaymentIntent] = useState<PaymentIntentResponse | null>(null);
   const [promoCode, setPromoCode] = useState('');
@@ -46,10 +46,14 @@ export const CheckoutPage: React.FC = () => {
         if (error) throw error;
 
         if (data) {
+          // The settings table stores shipping costs as dollar amounts (e.g., 5.00, 2.50)
+          // not as cents, so we use them directly
           setShippingCost(data.value);
+          console.log('Fetched shipping cost from settings:', data.value);
         }
       } catch (error) {
         console.error('Error fetching shipping cost:', error);
+        // Keep default values if fetch fails
       } finally {
         setIsLoadingShipping(false);
       }
@@ -61,9 +65,9 @@ export const CheckoutPage: React.FC = () => {
   const calculateShipping = () => {
     if (state.items.length === 0) return 0;
     const totalItems = state.items.reduce((sum, item) => sum + item.quantity, 0);
-    // Calculate shipping in dollars (not cents)
-    const shippingAmount = (shippingCost.base_price + (Math.max(0, totalItems - 1) * shippingCost.additional_item_price)) / 100;
-    console.log(`SHIPPING CALCULATION: Base price: ${shippingCost.base_price / 100}, Additional price: ${shippingCost.additional_item_price / 100}, Total items: ${totalItems}, Final shipping: ${shippingAmount}`);
+    // Calculate shipping in dollars - settings table stores values as dollars, not cents
+    const shippingAmount = shippingCost.base_price + (Math.max(0, totalItems - 1) * shippingCost.additional_item_price);
+    console.log(`SHIPPING CALCULATION: Base price: $${shippingCost.base_price}, Additional price: $${shippingCost.additional_item_price}, Total items: ${totalItems}, Final shipping: $${shippingAmount}`);
     return shippingAmount;
   };
 
