@@ -5,6 +5,7 @@ Fixed multiple display issues in the e-commerce application:
 1. **Discount Display Format**: Changed from `-$2.40 (10%)` to `(10%) -$2.40` format
 2. **Shipping Cost Display**: Fixed shipping costs showing as `0.0y` instead of `y.00`
 3. **Stripe Payment Page**: Removed shipping cost notification and duplicate Email headers
+4. **Stripe Input Field Height**: Fixed text field height to properly display lowercase letters with descenders
 
 ## Issue Description
 
@@ -17,6 +18,7 @@ After the discount fix, shipping costs were displaying as `0.0y` instead of `y.0
 ### Stripe Payment Page Issues
 1. **Shipping Cost Notification**: Unnecessary notification text "Note: The shipping cost will be applied correctly during payment processing."
 2. **Duplicate Email Headers**: Manual "Email" headers above `LinkAuthenticationElement` components created duplicate labels since Stripe automatically provides its own Email label.
+3. **Input Field Height**: Text fields were too short, causing lowercase letters with descenders (g, j, p, q, y) to be cut off and appear as different letters (e.g., "g" appearing as "q").
 
 ## Root Cause Analysis
 
@@ -84,9 +86,9 @@ The problem was in `CheckoutPage.tsx` where the shipping calculation was incorre
 </div>
 ```
 
-### 3. DirectStripeCheckout.tsx (Remove Duplicate Email Header)
+### 3. DirectStripeCheckout.tsx (Remove Duplicate Email Header & Fix Input Height)
 **Location:** `src/components/DirectStripeCheckout.tsx`
-**Lines Modified:** 303
+**Lines Modified:** 303, 130-142
 
 **Before:**
 ```tsx
@@ -117,7 +119,99 @@ The problem was in `CheckoutPage.tsx` where the shipping calculation was incorre
 </div>
 ```
 
-### 4. CheckoutPage.tsx (Shipping Cost Fix)
+**Stripe Elements Appearance (Added):**
+```tsx
+appearance: {
+  theme: 'stripe',
+  variables: {
+    colorPrimary: '#000000',
+    colorBackground: '#ffffff',
+    colorText: '#30313d',
+    colorDanger: '#df1b41',
+    fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+    spacingUnit: '4px',
+    borderRadius: '4px',
+  },
+  rules: {
+    '.Input': {
+      border: '1px solid #e2e8f0',
+      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+      padding: '12px 16px',
+      minHeight: '44px',
+      lineHeight: '1.5'
+    },
+    '.Input:focus': {
+      border: '1px solid #000000',
+      boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)'
+    }
+  }
+}
+```
+
+### 4. SimpleStripeCheckout.tsx (Fix Input Height)
+**Location:** `src/components/SimpleStripeCheckout.tsx`
+**Lines Modified:** 132-160
+
+**Before:**
+```tsx
+appearance: {
+  theme: 'stripe' as const,
+}
+```
+
+**After:**
+```tsx
+appearance: {
+  theme: 'stripe' as const,
+  variables: {
+    colorPrimary: '#000000',
+    colorBackground: '#ffffff',
+    colorText: '#1a1a1a',
+    colorDanger: '#df1b41',
+    fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+    spacingUnit: '4px',
+    borderRadius: '4px'
+  },
+  rules: {
+    '.Input': {
+      border: '1px solid #e2e8f0',
+      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+      padding: '12px 16px',
+      minHeight: '44px',
+      lineHeight: '1.5'
+    },
+    '.Input:focus': {
+      border: '1px solid #000000',
+      boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)'
+    }
+  }
+}
+```
+
+### 5. StripeElementsCheckout.tsx (Fix Input Height)
+**Location:** `src/components/StripeElementsCheckout.tsx`
+**Lines Modified:** 40-50
+
+**Before:**
+```tsx
+'.Input': {
+  border: '1px solid #e2e8f0',
+  boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+}
+```
+
+**After:**
+```tsx
+'.Input': {
+  border: '1px solid #e2e8f0',
+  boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+  padding: '12px 16px',
+  minHeight: '44px',
+  lineHeight: '1.5'
+}
+```
+
+### 6. CheckoutPage.tsx (Shipping Cost Fix)
 **Location:** `src/pages/CheckoutPage.tsx`
 **Lines Modified:** 18, 49-52, 65-71
 
@@ -221,8 +315,9 @@ const shippingAmount = shippingCost.base_price + (Math.max(0, totalItems - 1) * 
 ### Stripe Payment Page Fixes
 1. **Removed shipping notification**: Eliminated unnecessary explanatory text that could undermine customer confidence
 2. **Fixed duplicate Email headers**: Removed manual headers since `LinkAuthenticationElement` provides its own label
-3. **Improved UI cleanliness**: Streamlined payment form appearance
-4. **Maintained functionality**: All form validation and submission logic preserved
+3. **Fixed input field height**: Added proper padding, minHeight, and lineHeight to prevent text cutoff
+4. **Improved UI cleanliness**: Streamlined payment form appearance
+5. **Maintained functionality**: All form validation and submission logic preserved
 
 ### Shipping Cost Fix
 1. **Updated default values** from cents (400, 100) to dollars (5.00, 2.50)
@@ -241,8 +336,9 @@ const shippingAmount = shippingCost.base_price + (Math.max(0, totalItems - 1) * 
 ### Stripe Payment Page Testing
 1. **Navigate to checkout** and verify no shipping cost notification appears
 2. **Check Email field** has only one "Email" label (from Stripe, not duplicate)
-3. **Test form submission** to ensure all functionality still works
-4. **Verify autofill** for logged-in users works correctly
+3. **Test input field height** by typing text with lowercase letters (g, j, p, q, y) to ensure they display correctly
+4. **Test form submission** to ensure all functionality still works
+5. **Verify autofill** for logged-in users works correctly
 
 ### Shipping Cost Testing
 1. **Add items to cart** and verify shipping shows correct amount (e.g., $5.00 for 1 item, $7.50 for 2 items)
@@ -257,6 +353,8 @@ const shippingAmount = shippingCost.base_price + (Math.max(0, totalItems - 1) * 
 
 ## Technical Notes
 - **Stripe Elements**: `LinkAuthenticationElement` automatically provides its own Email label
+- **Input Field Height**: Added `padding: '12px 16px'`, `minHeight: '44px'`, and `lineHeight: '1.5'` to prevent text cutoff
+- **Typography**: Proper line height ensures descenders (g, j, p, q, y) are fully visible
 - **UI Best Practices**: Removed redundant explanatory text that could undermine customer confidence
 - **Shipping costs**: Settings table stores as dollars, database stores as cents, display converts back to dollars
 - **Discount display**: Only affects visual format, not calculation logic
@@ -271,7 +369,7 @@ const shippingAmount = shippingCost.base_price + (Math.max(0, totalItems - 1) * 
 
 ## Commit Information
 - **Branch**: clean-branch
-- **Files Changed**: 6 files (3 new fixes + previous fixes)
-- **Lines Modified**: ~35 lines total
+- **Files Changed**: 7 files (4 new fixes + previous fixes)
+- **Lines Modified**: ~50 lines total
 - **Type**: UI/UX improvements + Bug fixes
-- **Impact**: Cleaner payment UI, fixes display issues, no functional changes
+- **Impact**: Cleaner payment UI, proper text display, fixes display issues, no functional changes

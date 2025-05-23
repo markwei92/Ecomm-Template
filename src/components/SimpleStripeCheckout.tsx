@@ -134,6 +134,28 @@ export const SimpleStripeCheckout: React.FC<{
     clientSecret,
     appearance: {
       theme: 'stripe' as const,
+      variables: {
+        colorPrimary: '#000000',
+        colorBackground: '#ffffff',
+        colorText: '#1a1a1a',
+        colorDanger: '#df1b41',
+        fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+        spacingUnit: '4px',
+        borderRadius: '4px'
+      },
+      rules: {
+        '.Input': {
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+          padding: '12px 16px',
+          minHeight: '44px',
+          lineHeight: '1.5'
+        },
+        '.Input:focus': {
+          border: '1px solid #000000',
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)'
+        }
+      }
     },
   };
 
