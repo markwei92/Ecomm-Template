@@ -1085,42 +1085,62 @@ export const OrdersList: React.FC = () => {
                               <div className="border-t border-gray-200 pt-4">
                                 <h4 className="text-sm font-medium text-gray-900 mb-2">Order Items:</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                  {order.items && Array.isArray(order.items) && order.items.length > 0 ? (
-                                    order.items.map((item, index) => (
-                                      <div key={index} className="border border-gray-200 rounded p-3 bg-white">
-                                        <div className="flex items-start">
-                                          {item.image && (
-                                            <div className="flex-shrink-0 h-16 w-16 mr-3">
-                                              <img src={item.image} alt={item.title} className="h-full w-full object-cover rounded" />
-                                            </div>
-                                          )}
-                                          <div>
-                                            <p className="font-medium">{item.title}</p>
-                                            <p className="text-sm text-gray-500">
-                                              Qty: {item.quantity} • Price: ${typeof item.price === 'number' ? item.price.toFixed(2) : '0.00'}
-                                            </p>
-                                            {item.color && item.size && (
-                                              <p className="text-sm text-gray-500">
-                                                {item.color}, {item.size}
-                                              </p>
-                                            )}
-                                            {item.personalizationText && (
-                                              <div className="mt-2 p-2 bg-gray-50 rounded text-sm border border-gray-200">
-                                                <p className="font-medium text-gray-700 mb-1">Personalization:</p>
-                                                <div className="text-gray-600 whitespace-pre-wrap break-words overflow-hidden" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
-                                                  {item.personalizationText}
-                                                </div>
+                                  {(() => {
+                                    // Handle different formats of order.items
+                                    let items = order.items;
+
+                                    // If items is a string, try to parse it as JSON
+                                    if (typeof items === 'string') {
+                                      try {
+                                        items = JSON.parse(items);
+                                      } catch (e) {
+                                        console.error('Failed to parse items JSON:', e);
+                                        items = [];
+                                      }
+                                    }
+
+                                    // Ensure items is an array
+                                    if (!Array.isArray(items)) {
+                                      items = [];
+                                    }
+
+                                    return items && items.length > 0 ? (
+                                      items.map((item, index) => (
+                                        <div key={index} className="border border-gray-200 rounded p-3 bg-white">
+                                          <div className="flex items-start">
+                                            {item.image && (
+                                              <div className="flex-shrink-0 h-16 w-16 mr-3">
+                                                <img src={item.image} alt={item.title} className="h-full w-full object-cover rounded" />
                                               </div>
                                             )}
+                                            <div>
+                                              <p className="font-medium">{item.title}</p>
+                                              <p className="text-sm text-gray-500">
+                                                Qty: {item.quantity} • Price: ${typeof item.price === 'number' ? item.price.toFixed(2) : '0.00'}
+                                              </p>
+                                              {item.color && item.size && (
+                                                <p className="text-sm text-gray-500">
+                                                  {item.color}, {item.size}
+                                                </p>
+                                              )}
+                                              {item.personalizationText && (
+                                                <div className="mt-2 p-2 bg-gray-50 rounded text-sm border border-gray-200">
+                                                  <p className="font-medium text-gray-700 mb-1">Personalization:</p>
+                                                  <div className="text-gray-600 whitespace-pre-wrap break-words overflow-hidden" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
+                                                    {item.personalizationText}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
                                           </div>
                                         </div>
+                                      ))
+                                    ) : (
+                                      <div className="col-span-3 text-center py-4 text-gray-500">
+                                        No order items available
                                       </div>
-                                    ))
-                                  ) : (
-                                    <div className="col-span-3 text-center py-4 text-gray-500">
-                                      No order items available
-                                    </div>
-                                  )}
+                                    );
+                                  })()}
                                 </div>
                                 <div className="mt-4 flex justify-between border-t border-gray-200 pt-4">
                                   <div>
@@ -1130,9 +1150,60 @@ export const OrdersList: React.FC = () => {
                                     <p className="text-sm font-medium">Payment ID: <span className="font-normal">{order.payment_intent_id}</span></p>
                                   </div>
                                   <div className="text-right">
-                                    {/* Simplified order totals display */}
-                                    <p className="text-sm font-medium">Total: <span className="font-normal">{formatCurrency(order.amount_total)}</span></p>
-                                    <p className="text-sm font-medium">Shipping: <span className="font-normal">{formatCurrency(order.shipping_cost)}</span></p>
+                                    {/* Calculate subtotal based on item prices */}
+                                    {(() => {
+                                      // Parse items if they're stored as JSON string
+                                      let parsedItems = order.items;
+                                      if (typeof parsedItems === 'string') {
+                                        try {
+                                          parsedItems = JSON.parse(parsedItems);
+                                        } catch (e) {
+                                          parsedItems = [];
+                                        }
+                                      }
+                                      if (!Array.isArray(parsedItems)) {
+                                        parsedItems = [];
+                                      }
+
+                                      // Calculate the original subtotal from items
+                                      const itemsTotal = parsedItems.reduce((sum, item) => {
+                                        const itemPrice = typeof item.price === 'number' ? item.price : 0;
+                                        return sum + (itemPrice * item.quantity);
+                                      }, 0) || 0;
+
+                                      // Get the shipping cost - convert from cents to dollars
+                                      const shippingCost = (order.shipping_cost || 0) / 100;
+
+                                      // Check if there's a discount by comparing total with items + shipping
+                                      const totalFromDB = (order.amount_total || 0) / 100;
+                                      const calculatedTotal = itemsTotal + shippingCost;
+                                      const discrepancy = Math.abs(calculatedTotal - totalFromDB);
+
+                                      // If there's a significant discrepancy, assume a discount was applied
+                                      let discount = 0;
+                                      let discountPercentage = 0;
+
+                                      if (discrepancy > 0.01) { // More than 1 cent difference
+                                        discount = calculatedTotal - totalFromDB;
+                                        if (discount > 0 && itemsTotal > 0) {
+                                          discountPercentage = Math.round((discount / itemsTotal) * 100);
+                                        }
+                                      }
+
+                                      // Calculate discounted subtotal (not displayed separately)
+                                      // const discountedSubtotal = itemsTotal - discount;
+
+                                      return (
+                                        <>
+                                          <p className="text-sm font-medium">Subtotal: <span className="font-normal">${itemsTotal.toFixed(2)}</span></p>
+                                          {discount > 0 && (
+                                            <p className="text-sm font-medium">Discount: <span className="font-normal">({discountPercentage}%) -${discount.toFixed(2)}</span></p>
+                                          )}
+                                          <p className="text-sm font-medium">Shipping: <span className="font-normal">${shippingCost.toFixed(2)}</span></p>
+                                          <p className="text-sm font-medium text-lg">Total: <span className="font-normal">${totalFromDB.toFixed(2)}</span></p>
+                                        </>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                               </div>
