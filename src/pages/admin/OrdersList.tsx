@@ -1130,63 +1130,9 @@ export const OrdersList: React.FC = () => {
                                     <p className="text-sm font-medium">Payment ID: <span className="font-normal">{order.payment_intent_id}</span></p>
                                   </div>
                                   <div className="text-right">
-                                    {/* Calculate subtotal based on item prices */}
-                                    {(() => {
-                                      // Calculate the original subtotal from items
-                                      const itemsTotal = order.items?.reduce((sum, item) => {
-                                        const itemPrice = typeof item.price === 'number' ? item.price : 0;
-                                        return sum + (itemPrice * item.quantity);
-                                      }, 0) || 0;
-
-                                      // Get the shipping cost - use the database value if available
-                                      let shippingCost = order.shipping_cost / 100;
-
-                                      // For orders with specific issues, apply fixes
-                                      if (order.id === '2b17e1f7-8961-4394-a3d5-ce9a92ee57f4') {
-                                        // This specific order has a $4.00 shipping cost
-                                        shippingCost = 4.00;
-                                      }
-
-                                      // Check if there's a discrepancy between the total and the items total + shipping
-                                      // This could indicate a discount was applied
-                                      const totalFromDB = order.amount_total / 100;
-                                      const calculatedTotal = itemsTotal + shippingCost;
-                                      const discrepancy = Math.abs(calculatedTotal - totalFromDB);
-
-                                      // If there's a significant discrepancy, assume a discount was applied
-                                      let discount = 0;
-                                      let discountPercentage = 0;
-
-                                      if (discrepancy > 0.5) { // More than 50 cents difference
-                                        // For the specific order, we know it's a 10% discount
-                                        if (order.id === '2b17e1f7-8961-4394-a3d5-ce9a92ee57f4') {
-                                          discountPercentage = 10;
-                                          discount = itemsTotal * 0.1;
-                                        } else {
-                                          // For other orders, calculate the discount percentage
-                                          discount = calculatedTotal - totalFromDB;
-                                          if (discount > 0 && itemsTotal > 0) {
-                                            discountPercentage = Math.round((discount / itemsTotal) * 100);
-                                          }
-                                        }
-                                      }
-
-                                      const discountedSubtotal = itemsTotal - discount;
-
-                                      // Calculate total
-                                      const total = discountedSubtotal + shippingCost;
-
-                                      return (
-                                        <>
-                                          <p className="text-sm font-medium">Subtotal: <span className="font-normal">${itemsTotal.toFixed(2)}</span></p>
-                                          {discount > 0 && (
-                                            <p className="text-sm font-medium">Discount: <span className="font-normal">({discountPercentage}%) -${discount.toFixed(2)}</span></p>
-                                          )}
-                                          <p className="text-sm font-medium">Shipping: <span className="font-normal">${shippingCost.toFixed(2)}</span></p>
-                                          <p className="text-sm font-medium text-lg">Total: <span className="font-normal">${total.toFixed(2)}</span></p>
-                                        </>
-                                      );
-                                    })()}
+                                    {/* Simplified order totals display */}
+                                    <p className="text-sm font-medium">Total: <span className="font-normal">{formatCurrency(order.amount_total)}</span></p>
+                                    <p className="text-sm font-medium">Shipping: <span className="font-normal">{formatCurrency(order.shipping_cost)}</span></p>
                                   </div>
                                 </div>
                               </div>
