@@ -50,7 +50,14 @@ export async function createOrderFromPaymentIntent(
     title: string;
     price: number;
     quantity: number;
-  }>
+  }>,
+  discountInfo?: {
+    discount_amount?: number;
+    discount_type?: string;
+    promo_code?: string;
+    discount_percentage?: number | null;
+  },
+  shippingCost?: number
 ): Promise<{ id: string } | null> {
   try {
     console.log('Creating order for payment intent:', paymentIntentId);
@@ -69,7 +76,7 @@ export async function createOrderFromPaymentIntent(
     const customerId = `cus_${user.id.substring(0, 8)}`;
 
     // Create the order data
-    const orderData = {
+    const orderData: any = {
       payment_intent_id: paymentIntentId,
       customer_id: customerId,
       user_id: user.id,
@@ -79,6 +86,21 @@ export async function createOrderFromPaymentIntent(
       status: 'completed',
       items: items
     };
+
+    // Add discount information if provided
+    if (discountInfo) {
+      console.log('Adding discount information to order:', discountInfo);
+      orderData.discount_amount = discountInfo.discount_amount || 0;
+      orderData.discount_type = discountInfo.discount_type || null;
+      orderData.promo_code = discountInfo.promo_code || null;
+      orderData.discount_percentage = discountInfo.discount_percentage || null;
+    }
+
+    // Add shipping cost if provided
+    if (shippingCost) {
+      console.log('Adding shipping cost to order:', shippingCost);
+      orderData.shipping_cost = Math.round(shippingCost * 100); // Convert to cents
+    }
 
     console.log('Creating order with data:', orderData);
 

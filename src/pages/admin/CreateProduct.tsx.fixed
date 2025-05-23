@@ -266,12 +266,8 @@ export const CreateProduct: React.FC = () => {
     // Update selectedCollections when ageGroup changes
     if (field === 'ageGroup') {
       setSelectedCollections([value]);
-
-      // Update all variants to use the same ageGroup
-      setVariants(prev => prev.map(variant => ({
-        ...variant,
-        ageGroup: value
-      })));
+      // We no longer update all variants to the same age group
+      // This allows each variant to have its own age group
     }
   };
 

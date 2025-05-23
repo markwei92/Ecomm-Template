@@ -54,7 +54,8 @@ export const getAllProducts = async (): Promise<Product[]> => {
             ageGroup: product.age_group,
             sizes: Array.from(new Set(product.product_variants.map((v: any) => v.size))),
             createdAt: product.created_at,
-            canPersonalize: product.can_personalize
+            canPersonalize: product.can_personalize,
+            category: product.category // Include the category
         }));
 
         return transformedProducts;
@@ -123,7 +124,8 @@ export const getProductById = async (id: string): Promise<Product | null> => {
             ageGroup: data.age_group,
             sizes: Array.from(new Set(data.product_variants.map((v: any) => v.size))),
             createdAt: data.created_at,
-            canPersonalize: data.can_personalize
+            canPersonalize: data.can_personalize,
+            category: data.category // Include the category
         };
 
         return transformedProduct;

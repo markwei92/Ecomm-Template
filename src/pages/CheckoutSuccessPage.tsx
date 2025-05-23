@@ -9,6 +9,10 @@ interface Order {
   payment_intent_id: string;
   amount_total: number;
   shipping_cost: number;
+  discount_amount?: number;
+  discount_type?: string;
+  discount_percentage?: number;
+  promo_code?: string;
   items: Array<{
     title: string;
     price: number;
@@ -16,6 +20,7 @@ interface Order {
     color?: string;
     size?: string;
     image?: string;
+    personalizationText?: string;
   }>;
   shipping_address?: {
     name: string;
@@ -30,6 +35,7 @@ interface Order {
   created_at: string;
   currency: string;
   payment_status: string;
+  is_guest?: boolean;
 }
 
 export const CheckoutSuccessPage: React.FC = () => {
@@ -85,6 +91,20 @@ export const CheckoutSuccessPage: React.FC = () => {
           console.log('🚨 SUCCESS PAGE - No shipping address found in storage');
         }
 
+        // First, let's check the most recent order with ALL fields
+        console.log('🔍 SUCCESS PAGE - Checking most recent order with all fields...');
+        const { data: recentOrderData, error: recentOrderError } = await supabase
+          .from('stripe_orders')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (recentOrderError) {
+          console.error('🔍 SUCCESS PAGE - Error fetching recent order:', recentOrderError);
+        } else {
+          console.log('🔍 SUCCESS PAGE - Most recent order in database:', recentOrderData);
+        }
+
         // First, check if there are any orders in the database
         const { data: allOrders, error: allOrdersError } = await supabase
           .from('stripe_orders')
@@ -103,51 +123,73 @@ export const CheckoutSuccessPage: React.FC = () => {
           }
         }
 
-        // Now try to find the specific order
+        // Try multiple times to find the order by payment intent ID
         let orders = null;
+        let attempts = 0;
+        const maxAttempts = 5;
 
         if (paymentIntentId) {
-          console.log('Fetching order by payment intent ID:', paymentIntentId);
+          console.log('🔍 SUCCESS PAGE - Fetching order by payment intent ID:', paymentIntentId);
 
-          const { data, error } = await supabase
-            .from('stripe_orders')
-            .select('*')
-            .eq('payment_intent_id', paymentIntentId)
-            .limit(1);
+          while (attempts < maxAttempts && (!orders || orders.length === 0)) {
+            attempts++;
+            console.log(`🔍 SUCCESS PAGE - Attempt ${attempts} to find order`);
 
-          if (error) {
-            console.error('Error querying by payment_intent_id:', error);
-          } else {
-            orders = data;
-            console.log('Orders found by payment_intent_id:', orders);
-          }
-        }
+            // Wait a bit longer for each attempt
+            await new Promise(resolve => setTimeout(resolve, attempts * 1000));
 
-        // If no order found by payment intent ID, try to get the latest order
-        if (!orders || orders.length === 0) {
-          console.log('No order found by payment intent ID, getting latest order');
-
-          const { data: { user } } = await supabase.auth.getUser();
-
-          if (user) {
             const { data, error } = await supabase
               .from('stripe_orders')
               .select('*')
-              .eq('user_id', user.id)
+              .eq('payment_intent_id', paymentIntentId)
               .order('created_at', { ascending: false })
               .limit(1);
 
             if (error) {
-              console.error('Error getting latest order:', error);
+              console.error(`🔍 SUCCESS PAGE - Attempt ${attempts} error:`, error);
             } else {
               orders = data;
-              console.log('Latest order found:', orders);
+              console.log(`🔍 SUCCESS PAGE - Attempt ${attempts} result:`, orders);
+
+              if (orders && orders.length > 0) {
+                console.log('🔍 SUCCESS PAGE - Found order on attempt', attempts);
+                break;
+              }
             }
+          }
+
+          // If still no order found, this is a problem
+          if (!orders || orders.length === 0) {
+            console.error('🔍 SUCCESS PAGE - CRITICAL: No order found after all attempts for payment intent:', paymentIntentId);
+
+            // As a last resort, get the most recent order for debugging
+            const { data: debugOrders } = await supabase
+              .from('stripe_orders')
+              .select('*')
+              .order('created_at', { ascending: false })
+              .limit(3);
+
+            console.log('🔍 SUCCESS PAGE - Most recent orders for debugging:', debugOrders);
           }
         }
 
         if (orders && orders.length > 0) {
           const currentOrder = orders[0];
+
+          // Log ALL order information for debugging
+          console.log('🔍 SUCCESS PAGE - Complete order data:', currentOrder);
+
+          // Log discount information for debugging
+          console.log('🔍 SUCCESS PAGE - Order found with discount info:', {
+            discount_amount: currentOrder.discount_amount,
+            discount_type: currentOrder.discount_type,
+            discount_percentage: currentOrder.discount_percentage,
+            promo_code: currentOrder.promo_code,
+            amount_total: currentOrder.amount_total,
+            shipping_cost: currentOrder.shipping_cost,
+            items: currentOrder.items
+          });
+
           setOrder(currentOrder);
 
           // Check if this is a guest order using the is_guest flag
@@ -366,77 +408,126 @@ export const CheckoutSuccessPage: React.FC = () => {
                 <div className="mb-4">
                   <p className="text-sm font-medium text-gray-700 mb-2">Order Items:</p>
                   <div className="space-y-3">
-                    {order.items && order.items.length > 0 ? (
-                      order.items.map((item, index) => (
-                        <div key={index} className="flex items-start space-x-3 text-left">
-                          {item.image && (
-                            <img
-                              src={item.image}
-                              alt={item.title}
-                              className="w-12 h-12 object-cover rounded"
-                            />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium">{item.title}</p>
-                            <div className="text-xs text-gray-500">
-                              <span>Qty: {item.quantity}</span>
-                              {item.color && <span> • Color: {item.color}</span>}
-                              {item.size && <span> • Size: {item.size}</span>}
-                            </div>
-                            <p className="text-sm">${item.price.toFixed(2)} each</p>
-                            {item.personalizationText && (
-                              <div className="mt-1 p-2 bg-gray-50 rounded text-xs">
-                                <span className="font-medium">Personalization: </span>
-                                <div className="text-gray-700 break-words whitespace-pre-wrap overflow-hidden max-w-full" style={{ wordBreak: 'break-all' }}>
-                                  {item.personalizationText}
-                                </div>
-                              </div>
+                    {(() => {
+                      // Handle both old format (items array) and new format (items object with discount_info)
+                      const itemsData = order.items;
+                      const actualItems = Array.isArray(itemsData) ? itemsData : (itemsData?.items || []);
+
+                      return actualItems && actualItems.length > 0 ? (
+                        actualItems.map((item, index) => (
+                          <div key={index} className="flex items-start space-x-3 text-left">
+                            {item.image && (
+                              <img
+                                src={item.image}
+                                alt={item.title}
+                                className="w-12 h-12 object-cover rounded"
+                              />
                             )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium">{item.title}</p>
+                              <div className="text-xs text-gray-500">
+                                <span>Qty: {item.quantity}</span>
+                                {item.color && <span> • Color: {item.color}</span>}
+                                {item.size && <span> • Size: {item.size}</span>}
+                              </div>
+                              <p className="text-sm">${item.price.toFixed(2)} each</p>
+                              {item.personalizationText && (
+                                <div className="mt-1 p-2 bg-gray-50 rounded text-xs">
+                                  <span className="font-medium">Personalization: </span>
+                                  <div className="text-gray-700 break-words whitespace-pre-wrap overflow-hidden max-w-full" style={{ wordBreak: 'break-all' }}>
+                                    {item.personalizationText}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-gray-500">No item details available</p>
-                    )}
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500">No item details available</p>
+                      );
+                    })()}
                   </div>
                 </div>
 
                 {/* Order Summary - Moved below items */}
                 <div className="border-t border-gray-200 pt-4">
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm text-gray-600">Subtotal</p>
-                    <p className="text-sm font-medium text-gray-900">
-                      ${((order.amount_total - (order.shipping_cost || 0) + (order.discount_amount || 0)) / 100).toFixed(2)}
-                    </p>
-                  </div>
+                  {(() => {
+                    // Handle both old format (items array) and new format (items object with discount_info)
+                    const itemsData = order.items;
+                    const actualItems = Array.isArray(itemsData) ? itemsData : (itemsData?.items || []);
+                    const discountInfo = Array.isArray(itemsData) ? null : itemsData?.discount_info;
 
-                  {/* Display discount if available */}
-                  {order.discount_amount > 0 && (
-                    <div className="flex justify-between items-center mt-1">
-                      <p className="text-sm text-gray-600">
-                        Discount {order.discount_type === 'percentage' && order.discount_percentage ? `(${order.discount_percentage}%)` : ''}
-                      </p>
-                      <p className="text-sm font-medium text-green-600">
-                        -${(order.discount_amount / 100).toFixed(2)}
-                      </p>
-                    </div>
-                  )}
+                    // Calculate subtotal from items
+                    const calculatedSubtotal = actualItems && actualItems.length > 0
+                      ? parseFloat(actualItems.reduce((sum, item) =>
+                        sum + (parseFloat(item.price) * item.quantity), 0).toFixed(2))
+                      : ((order.amount_total - (order.shipping_cost || 0) + (order.discount_amount || 0)) / 100);
 
-                  {order.shipping_cost > 0 && (
-                    <div className="flex justify-between items-center mt-1">
-                      <p className="text-sm text-gray-600">Shipping</p>
-                      <p className="text-sm font-medium text-gray-900">
-                        ${(order.shipping_cost / 100).toFixed(2)}
-                      </p>
-                    </div>
-                  )}
+                    // Get discount amount from either the old columns or the embedded discount_info
+                    const discountAmount = (
+                      order.discount_amount ||
+                      discountInfo?.discount_amount ||
+                      0
+                    ) / 100;
 
-                  <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200">
-                    <p className="text-sm font-medium text-gray-700">Order Total</p>
-                    <p className="text-xl font-bold text-gray-900">
-                      ${(order.amount_total / 100).toFixed(2)}
-                    </p>
-                  </div>
+                    // Calculate shipping cost
+                    const shippingCost = (order.shipping_cost || 0) / 100;
+
+                    // Calculate total
+                    const calculatedTotal = calculatedSubtotal - discountAmount + shippingCost;
+
+                    // Log for debugging
+                    console.log('🔍 SUCCESS PAGE - Order calculations:', {
+                      calculatedSubtotal,
+                      discountAmount,
+                      shippingCost,
+                      calculatedTotal,
+                      storedTotal: (order.amount_total || 0) / 100,
+                      discount_info: {
+                        discount_amount: order.discount_amount,
+                        discount_type: order.discount_type,
+                        discount_percentage: order.discount_percentage,
+                        promo_code: order.promo_code
+                      }
+                    });
+
+                    return (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <p className="text-sm text-gray-600">Subtotal</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            ${calculatedSubtotal.toFixed(2)}
+                          </p>
+                        </div>
+
+                        {/* Always display discount row */}
+                        <div className="flex justify-between items-center mt-1">
+                          <p className="text-sm text-gray-600">Discount</p>
+                          <p className="text-sm font-medium text-green-600">
+                            {discountAmount > 0 ? (
+                              (order.discount_type || discountInfo?.discount_type) === 'percentage' && (order.discount_percentage || discountInfo?.discount_percentage) ?
+                                `(${order.discount_percentage || discountInfo?.discount_percentage}%) -$${discountAmount.toFixed(2)}` :
+                                `-$${discountAmount.toFixed(2)}`
+                            ) : '$0.00'}
+                          </p>
+                        </div>
+
+                        <div className="flex justify-between items-center mt-1">
+                          <p className="text-sm text-gray-600">Shipping</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            ${shippingCost.toFixed(2)}
+                          </p>
+                        </div>
+
+                        <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200">
+                          <p className="text-sm font-medium text-gray-700">Order Total</p>
+                          <p className="text-xl font-bold text-gray-900">
+                            ${calculatedTotal.toFixed(2)}
+                          </p>
+                        </div>
+                      </>
+                    );
+                  })()}
 
                   <p className="text-xs text-gray-500 mt-2">
                     Order ID: {order.id}

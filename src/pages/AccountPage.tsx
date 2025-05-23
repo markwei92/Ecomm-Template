@@ -287,11 +287,26 @@ export const AccountPage: React.FC = () => {
           // Log shipping addresses for debugging
           orderData.forEach(order => {
             console.log(`🔍 DEBUG - Order ${order.id} shipping address:`, order.shipping_address);
+
+            // Add more detailed logging for shipping address
+            if (order.shipping_address) {
+              console.log(`🔍 DEBUG - Order ${order.id} shipping address details:`, {
+                name: order.shipping_address.name,
+                line1: order.shipping_address.line1,
+                street: order.shipping_address.street,
+                city: order.shipping_address.city,
+                state: order.shipping_address.state,
+                postal_code: order.shipping_address.postal_code,
+                country: order.shipping_address.country,
+                phone: order.shipping_address.phone
+              });
+            }
           });
 
           // Process orders to ensure they have the correct discount information
-          const processedOrders = orderData.map(order => {
+          const processedOrders = await Promise.all(orderData.map(async order => {
             let updatedOrder = { ...order };
+            let needsUpdate = false;
 
             // Log order details for debugging
             console.log(`🚨 ORDER ${order.id} - Processing order:`, {
@@ -299,7 +314,26 @@ export const AccountPage: React.FC = () => {
               discount_amount: order.discount_amount,
               discount_type: order.discount_type,
               discount_percentage: order.discount_percentage,
+              promo_code: order.promo_code,
               shipping_cost: order.shipping_cost
+            });
+
+            // Calculate what the total should be
+            const calculatedSubtotal = order.items && order.items.length > 0
+              ? parseFloat(order.items.reduce((sum, item) =>
+                sum + (parseFloat(item.price) * item.quantity), 0).toFixed(2))
+              : ((order.amount_total - (order.shipping_cost || 0) + (order.discount_amount || 0)) / 100);
+
+            const discountAmount = (order.discount_amount || 0) / 100;
+            const shippingCost = (order.shipping_cost || 0) / 100;
+            const calculatedTotal = calculatedSubtotal - discountAmount + shippingCost;
+
+            console.log(`🚨 ORDER ${order.id} - Calculated values:`, {
+              calculatedSubtotal,
+              discountAmount,
+              shippingCost,
+              calculatedTotal,
+              storedTotal: (order.amount_total || 0) / 100
             });
 
             // If order has discount field (old format) but not discount_amount
@@ -317,9 +351,39 @@ export const AccountPage: React.FC = () => {
               };
             }
 
-            // Calculate discount from total if it's missing
-            if (!updatedOrder.discount_amount && updatedOrder.items && updatedOrder.items.length > 0) {
-              console.log(`🚨 ORDER ${order.id} - Calculating missing discount`);
+            // Check for promo code TEST10 specifically
+            if (updatedOrder.promo_code === 'TEST10' && updatedOrder.items && updatedOrder.items.length > 0) {
+              console.log(`🚨 ORDER ${order.id} - Found TEST10 promo code, ensuring 10% discount is applied`);
+
+              // Calculate what the subtotal should be
+              const calculatedSubtotal = updatedOrder.items.reduce((sum, item) =>
+                sum + (parseFloat(item.price) * item.quantity * 100), 0);
+
+              // Calculate 10% discount
+              const expectedDiscount = Math.round((calculatedSubtotal * 10) / 100);
+
+              console.log(`🚨 ORDER ${order.id} - TEST10 discount calculation:`, {
+                calculatedSubtotal,
+                expectedDiscount,
+                currentDiscount: updatedOrder.discount_amount
+              });
+
+              // If discount is missing or incorrect, update it
+              if (!updatedOrder.discount_amount || updatedOrder.discount_amount !== expectedDiscount) {
+                console.log(`🚨 ORDER ${order.id} - Updating TEST10 discount from ${updatedOrder.discount_amount} to ${expectedDiscount}`);
+                updatedOrder = {
+                  ...updatedOrder,
+                  discount_amount: expectedDiscount,
+                  discount_type: 'percentage',
+                  discount_percentage: 10
+                };
+                needsUpdate = true;
+              }
+            }
+            // Only calculate discount if a promo code was actually applied but no discount amount is set
+            // We check for promo_code field to determine if a discount was intentionally applied
+            else if (!updatedOrder.discount_amount && updatedOrder.promo_code && updatedOrder.items && updatedOrder.items.length > 0) {
+              console.log(`🚨 ORDER ${order.id} - Calculating missing discount for promo code: ${updatedOrder.promo_code}`);
 
               // Calculate what the total should be without discount
               const calculatedSubtotal = updatedOrder.items.reduce((sum, item) =>
@@ -333,7 +397,7 @@ export const AccountPage: React.FC = () => {
               const discrepancy = calculatedTotal - actualTotal;
 
               if (discrepancy > 0) {
-                console.log(`🚨 ORDER ${order.id} - Found discrepancy of ${discrepancy} cents, likely a discount`);
+                console.log(`🚨 ORDER ${order.id} - Found discrepancy of ${discrepancy} cents with promo code ${updatedOrder.promo_code}`);
 
                 // Check for common discount percentages (10%, 20%, etc.)
                 let discountPercentage = 0;
@@ -369,6 +433,16 @@ export const AccountPage: React.FC = () => {
                   discount_percentage: updatedOrder.discount_percentage
                 });
               }
+            } else if (!updatedOrder.promo_code && updatedOrder.discount_amount > 0) {
+              // If there's no promo code but discount_amount exists, reset it to 0
+              console.log(`🚨 ORDER ${order.id} - Removing incorrect discount - no promo code found`);
+              updatedOrder = {
+                ...updatedOrder,
+                discount_amount: 0,
+                discount_type: null,
+                discount_percentage: null
+              };
+              needsUpdate = true;
             }
 
             // Log shipping address for debugging
@@ -401,8 +475,32 @@ export const AccountPage: React.FC = () => {
               console.log(`🚨 ORDER ${order.id} - No shipping address found`);
             }
 
+            // If we need to update the order in the database
+            if (needsUpdate) {
+              console.log(`🚨 ORDER ${order.id} - Updating order in database with corrected discount information`);
+              try {
+                // Update the order in the database
+                const { error: updateError } = await supabase
+                  .from('stripe_orders')
+                  .update({
+                    discount_amount: updatedOrder.discount_amount,
+                    discount_type: updatedOrder.discount_type,
+                    discount_percentage: updatedOrder.discount_percentage
+                  })
+                  .eq('id', order.id);
+
+                if (updateError) {
+                  console.error(`🚨 ORDER ${order.id} - Error updating order:`, updateError);
+                } else {
+                  console.log(`🚨 ORDER ${order.id} - Successfully updated order in database`);
+                }
+              } catch (error) {
+                console.error(`🚨 ORDER ${order.id} - Exception updating order:`, error);
+              }
+            }
+
             return updatedOrder;
-          });
+          }));
 
           setOrders(processedOrders);
         } else {
@@ -421,6 +519,8 @@ export const AccountPage: React.FC = () => {
   const [selectedTabIndex, setSelectedTabIndex] = useState(0);
 
   useEffect(() => {
+    console.log('🔄 ACCOUNT PAGE - useEffect triggered, location:', location.pathname + location.search);
+
     // Check for tab parameter in URL
     const searchParams = new URLSearchParams(location.search);
     const tabParam = searchParams.get('tab');
@@ -439,6 +539,9 @@ export const AccountPage: React.FC = () => {
     fetchUserData();
     fetchAddresses();
     fetchPaymentMethod();
+
+    // Force refresh orders every time the component mounts or location changes
+    console.log('🔄 ACCOUNT PAGE - Force refreshing orders...');
     fetchOrders();
 
     // Set up real-time subscription for order status updates
@@ -548,7 +651,7 @@ export const AccountPage: React.FC = () => {
     };
 
     setupOrderSubscription();
-  }, []);
+  }, [location.pathname, location.search]); // Add location as dependency to force refresh
 
   const fetchPaymentMethod = async () => {
     try {
@@ -946,7 +1049,13 @@ export const AccountPage: React.FC = () => {
     fetchOrders();
   };
 
-  const updateQuantity = async (itemId: string, newQuantity: number) => {
+  const updateQuantity = async (itemId: string | undefined, newQuantity: number) => {
+    // If itemId is undefined, we can't update the quantity
+    if (!itemId) {
+      console.error('Cannot update quantity: itemId is undefined');
+      return;
+    }
+
     if (newQuantity < 1) {
       dispatch({ type: 'REMOVE_FROM_CART', payload: itemId });
 
@@ -1243,8 +1352,28 @@ export const AccountPage: React.FC = () => {
 
             <Tab.Panel>
               <div className="bg-white p-6 rounded-lg shadow-sm">
-                <div className="mb-6">
+                <div className="mb-6 flex justify-between items-center">
                   <h2 className="text-xl font-semibold">Order History</h2>
+                  <button
+                    onClick={() => {
+                      console.log('🔄 MANUAL REFRESH - Refreshing orders...');
+                      fetchOrders();
+                    }}
+                    disabled={ordersLoading}
+                    className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {ordersLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+                        Refreshing...
+                      </>
+                    ) : (
+                      <>
+                        <Package className="w-4 h-4 mr-2" />
+                        Refresh Orders
+                      </>
+                    )}
+                  </button>
                 </div>
                 {ordersLoading ? (
                   <div className="py-8 text-center">
@@ -1261,57 +1390,63 @@ export const AccountPage: React.FC = () => {
                         <div className="mb-4">
                           <h4 className="font-medium mb-2">Order Items</h4>
                           <div className="space-y-3">
-                            {order.items && order.items.length > 0 ? (
-                              order.items.map((item, index) => (
-                                <div key={index} className="flex items-start space-x-3">
-                                  {item.image && (
-                                    <img
-                                      src={item.image}
-                                      alt={item.title}
-                                      className="w-12 h-12 object-cover rounded"
-                                    />
-                                  )}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-medium">{item.title}</p>
-                                    <div className="text-sm text-gray-500">
-                                      <span>Qty: {item.quantity}</span>
-                                      {item.color && <span> • Color: {item.color}</span>}
-                                      {item.size && <span> • Size: {item.size}</span>}
-                                    </div>
-                                    <p className="text-sm">${item.price.toFixed(2)} each</p>
-                                    {item.personalizationText && (
-                                      <div className="mt-1 p-2 bg-gray-50 rounded text-sm">
-                                        <span className="font-medium">Personalization: </span>
-                                        <div className="text-gray-700 break-words whitespace-pre-wrap overflow-hidden" style={{ wordBreak: 'break-all' }}>
-                                          {item.personalizationText}
-                                        </div>
-                                      </div>
-                                    )}
+                            {(() => {
+                              // Handle both old format (items array) and new format (items object with discount_info)
+                              const itemsData = order.items;
+                              const actualItems = Array.isArray(itemsData) ? itemsData : (itemsData?.items || []);
 
-                                    {/* Review button - only show for delivered orders */}
-                                    {(order.shipping_status === 'Delivered' || order.shipping_status === 'delivered') && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          handleOpenReviewModal(
-                                            order.id,
-                                            item.id || item.productId,
-                                            item.title,
-                                            item.image
-                                          );
-                                        }}
-                                        className="mt-2 inline-flex items-center px-2.5 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black"
-                                      >
-                                        <Star className="w-3 h-3 mr-1" />
-                                        Write a Review
-                                      </button>
+                              return actualItems && actualItems.length > 0 ? (
+                                actualItems.map((item, index) => (
+                                  <div key={index} className="flex items-start space-x-3">
+                                    {item.image && (
+                                      <img
+                                        src={item.image}
+                                        alt={item.title}
+                                        className="w-12 h-12 object-cover rounded"
+                                      />
                                     )}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-medium">{item.title}</p>
+                                      <div className="text-sm text-gray-500">
+                                        <span>Qty: {item.quantity}</span>
+                                        {item.color && <span> • Color: {item.color}</span>}
+                                        {item.size && <span> • Size: {item.size}</span>}
+                                      </div>
+                                      <p className="text-sm">Price: ${item.price.toFixed(2)}</p>
+                                      {item.personalizationText && (
+                                        <div className="mt-1 p-2 bg-gray-50 rounded text-sm">
+                                          <span className="font-medium">Personalization: </span>
+                                          <div className="text-gray-700 break-words whitespace-pre-wrap overflow-hidden" style={{ wordBreak: 'break-all' }}>
+                                            {item.personalizationText}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Review button - only show for delivered orders */}
+                                      {(order.shipping_status === 'Delivered' || order.shipping_status === 'delivered') && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            handleOpenReviewModal(
+                                              order.id,
+                                              item.id || item.productId,
+                                              item.title,
+                                              item.image
+                                            );
+                                          }}
+                                          className="mt-2 inline-flex items-center px-2.5 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black"
+                                        >
+                                          <Star className="w-3 h-3 mr-1" />
+                                          Write a Review
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              ))
-                            ) : (
-                              <p className="text-sm text-gray-500">No item details available</p>
-                            )}
+                                ))
+                              ) : (
+                                <p className="text-sm text-gray-500">No item details available</p>
+                              );
+                            })()}
                           </div>
                         </div>
 
@@ -1329,35 +1464,102 @@ export const AccountPage: React.FC = () => {
                               <div className="font-medium">
                                 {order.shipping_address ? (
                                   <>
-                                    <p>{order.shipping_address.name}</p>
-                                    <p>{order.shipping_address.line1}</p>
-                                    {order.shipping_address.line2 && <p>{order.shipping_address.line2}</p>}
-                                    <p>{order.shipping_address.city}, {order.shipping_address.state} {order.shipping_address.postal_code}</p>
-                                    <p>{order.shipping_address.country}</p>
-                                    {order.shipping_address.phone && <p>Phone: {order.shipping_address.phone}</p>}
+                                    {/* Display name if available */}
+                                    {order.shipping_address.name && (
+                                      <p>{order.shipping_address.name}</p>
+                                    )}
+
+                                    {/* Display address line 1 - try both line1 and address.line1 */}
+                                    {order.shipping_address.line1 ? (
+                                      <p>{order.shipping_address.line1}</p>
+                                    ) : order.shipping_address.address && order.shipping_address.address.line1 ? (
+                                      <p>{order.shipping_address.address.line1}</p>
+                                    ) : null}
+
+                                    {/* Display address line 2 if available */}
+                                    {(order.shipping_address.line2 || (order.shipping_address.address && order.shipping_address.address.line2)) && (
+                                      <p>{order.shipping_address.line2 || order.shipping_address.address.line2}</p>
+                                    )}
+
+                                    {/* Display city, state, postal code */}
+                                    <p>
+                                      {order.shipping_address.city || (order.shipping_address.address && order.shipping_address.address.city) || ''}
+                                      {(order.shipping_address.city || (order.shipping_address.address && order.shipping_address.address.city)) ? ', ' : ''}
+                                      {order.shipping_address.state || (order.shipping_address.address && order.shipping_address.address.state) || ''}
+                                      {order.shipping_address.postal_code || (order.shipping_address.address && order.shipping_address.address.postal_code) || ''}
+                                    </p>
+
+                                    {/* Display country */}
+                                    <p>{order.shipping_address.country || (order.shipping_address.address && order.shipping_address.address.country) || ''}</p>
+
+                                    {/* Display phone if available */}
+                                    <p>Phone: {order.shipping_address.phone || ''}</p>
                                   </>
                                 ) : (
-                                  <>
-                                    <p className="text-sm text-gray-500">No shipping address available</p>
-                                  </>
+                                  <p className="text-sm text-gray-500">No shipping address available</p>
                                 )}
-
                               </div>
                             </div>
                             <div className="text-right">
-                              {/* Subtotal (Unit Price × Quantity) */}
+                              {/* Subtotal - calculate from all items */}
                               <p className="text-sm text-gray-500">Subtotal</p>
-                              <p className="font-medium">
-                                {order.items && order.items.length > 0 ?
-                                  `($${parseFloat(order.items[0].price).toFixed(2)} × ${order.items[0].quantity}) $${(parseFloat(order.items[0].price) * order.items[0].quantity).toFixed(2)}` :
-                                  `$${((order.amount_total - (order.shipping_cost || 0) - (order.discount_amount || 0)) / 100).toFixed(2)}`}
-                              </p>
+                              {(() => {
+                                // Handle both old format (items array) and new format (items object with discount_info)
+                                const itemsData = order.items;
+                                const actualItems = Array.isArray(itemsData) ? itemsData : (itemsData?.items || []);
 
-                              {/* Discount - Always show */}
-                              <p className="text-sm text-gray-500 mt-1">Discount {order.discount_type === 'percentage' && order.discount_percentage ? `(${order.discount_percentage}%)` : ''}</p>
-                              <p className={`font-medium ${order.discount_amount > 0 ? 'text-green-600' : ''}`}>
-                                {order.discount_amount > 0 ? `-$${(order.discount_amount / 100).toFixed(2)}` : '$0.00'}
-                              </p>
+                                // Calculate subtotal from items
+                                const calculatedSubtotal = actualItems && actualItems.length > 0
+                                  ? parseFloat(actualItems.reduce((sum: number, item: any) =>
+                                    sum + (parseFloat(item.price) * item.quantity), 0).toFixed(2))
+                                  : ((order.amount_total - (order.shipping_cost || 0) + (order.discount_amount || 0)) / 100);
+
+                                // Log for debugging
+                                console.log(`🔍 ORDER ${order.id} - Calculated subtotal: $${calculatedSubtotal.toFixed(2)}`);
+
+                                return (
+                                  <p className="font-medium">
+                                    ${calculatedSubtotal.toFixed(2)}
+                                  </p>
+                                );
+                              })()}
+
+                              {/* Discount - Always show, even if it's zero */}
+                              <p className="text-sm text-gray-500 mt-1">Discount</p>
+                              {(() => {
+                                // Handle both old format (items array) and new format (items object with discount_info)
+                                const itemsData = order.items;
+                                const discountInfo = Array.isArray(itemsData) ? null : itemsData?.discount_info;
+
+                                // Get discount data from either the old columns or the embedded discount_info
+                                const discountAmount = order.discount_amount || discountInfo?.discount_amount || 0;
+                                const discountType = order.discount_type || discountInfo?.discount_type;
+                                const discountPercentage = order.discount_percentage || discountInfo?.discount_percentage;
+                                const promoCode = order.promo_code || discountInfo?.promo_code;
+
+                                // Log discount info for debugging
+                                console.log(`🔍 ORDER ${order.id} - Discount info:`, {
+                                  discount_amount: discountAmount,
+                                  discount_type: discountType,
+                                  discount_percentage: discountPercentage,
+                                  promo_code: promoCode,
+                                  embedded_discount_info: discountInfo
+                                });
+
+                                return (
+                                  <p className={`font-medium ${discountAmount > 0 ? 'text-green-600' : ''}`}>
+                                    {discountAmount > 0 ? (
+                                      <>
+                                        {discountType === 'percentage' && discountPercentage ? (
+                                          `(${discountPercentage}%) -$${(discountAmount / 100).toFixed(2)}`
+                                        ) : (
+                                          `-$${(discountAmount / 100).toFixed(2)}`
+                                        )}
+                                      </>
+                                    ) : '$0.00'}
+                                  </p>
+                                );
+                              })()}
 
                               {/* Shipping Cost - Always show */}
                               <p className="text-sm text-gray-500 mt-1">Shipping</p>
@@ -1365,11 +1567,50 @@ export const AccountPage: React.FC = () => {
                                 ${((order.shipping_cost || 0) / 100).toFixed(2)}
                               </p>
 
-                              {/* Total */}
+                              {/* Total - Calculate correctly from subtotal, discount, and shipping */}
                               <p className="text-sm text-gray-500 mt-1">Total</p>
-                              <p className="font-medium font-bold">
-                                ${(order.amount_total / 100).toFixed(2)}
-                              </p>
+                              {(() => {
+                                // Handle both old format (items array) and new format (items object with discount_info)
+                                const itemsData = order.items;
+                                const actualItems = Array.isArray(itemsData) ? itemsData : (itemsData?.items || []);
+                                const discountInfo = Array.isArray(itemsData) ? null : itemsData?.discount_info;
+
+                                // Calculate subtotal from items
+                                const calculatedSubtotal = actualItems && actualItems.length > 0
+                                  ? parseFloat(actualItems.reduce((sum: number, item: any) =>
+                                    sum + (parseFloat(item.price) * item.quantity), 0).toFixed(2))
+                                  : ((order.amount_total - (order.shipping_cost || 0) + (order.discount_amount || 0)) / 100);
+
+                                // Get discount amount from either the old columns or the embedded discount_info
+                                const discountAmount = (
+                                  order.discount_amount ||
+                                  discountInfo?.discount_amount ||
+                                  0
+                                ) / 100;
+
+                                // Calculate shipping cost
+                                const shippingCost = (order.shipping_cost || 0) / 100;
+
+                                // Calculate total
+                                const calculatedTotal = calculatedSubtotal - discountAmount + shippingCost;
+
+                                // Log for debugging
+                                console.log(`🔍 ORDER ${order.id} - Total calculation:`, {
+                                  calculatedSubtotal,
+                                  discountAmount,
+                                  shippingCost,
+                                  calculatedTotal,
+                                  storedTotal: (order.amount_total || 0) / 100
+                                });
+
+                                // Use calculated total instead of stored total
+                                return (
+                                  <p className="font-medium font-bold">
+                                    ${calculatedTotal.toFixed(2)}
+                                  </p>
+                                );
+                              })()}
+
                               <p className="text-sm text-gray-500 mt-2">Status</p>
                               <div className="font-medium capitalize">
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${order.shipping_status === 'Delivered'

@@ -4,12 +4,16 @@ import { SimpleStripeCheckout } from './SimpleStripeCheckout';
 import { useSupabase } from '../context/SupabaseContext';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
+import { CustomShippingDisplay } from './CustomShippingDisplay';
 
 export const StripeCheckoutWrapper: React.FC<{
   clientSecret: string;
   onSuccess?: (paymentIntentId: string) => void;
   onCancel?: () => void;
-}> = ({ clientSecret, onSuccess, onCancel }) => {
+  shippingCost?: number; // Add shipping cost parameter
+}> = ({ clientSecret, onSuccess, onCancel, shippingCost = 6.00 }) => {
+  // IMPORTANT: We're hardcoding the shipping cost to $6.00 to ensure it's displayed correctly
+  // This is a workaround for the Stripe API issue with shipping cost display
   const navigate = useNavigate();
   const { supabase } = useSupabase();
   const { user } = useAuth();
@@ -170,6 +174,9 @@ export const StripeCheckoutWrapper: React.FC<{
 
   return (
     <div className="w-full max-w-md mx-auto">
+      {/* Display the correct shipping cost */}
+      <CustomShippingDisplay shippingCost={shippingCost} />
+
       <SimpleStripeCheckout
         clientSecret={clientSecret}
         onSuccess={handlePaymentSuccess}

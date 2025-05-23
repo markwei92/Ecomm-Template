@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Edit, Trash2, Plus, Search, Filter, ChevronDown } from 'lucide-react';
 import { supabase, testConnection } from '../../lib/supabase';
-import { toast } from 'react-toastify'; 
+import { toast } from 'react-toastify';
 import { PostgrestError } from '@supabase/supabase-js';
 
 interface Product {
@@ -34,6 +34,15 @@ export const ProductList: React.FC = () => {
     fetchProducts();
   }, [sortBy, sortOrder]);
 
+  // Add a separate effect to refresh products when the component mounts
+  useEffect(() => {
+    const refreshInterval = setInterval(() => {
+      fetchProducts();
+    }, 5000); // Refresh every 5 seconds
+
+    return () => clearInterval(refreshInterval);
+  }, []);
+
   const checkConnection = async () => {
     const isConnected = await testConnection();
     if (!isConnected) {
@@ -44,12 +53,19 @@ export const ProductList: React.FC = () => {
 
   const fetchProducts = async () => {
     try {
+      // Only show loading state on initial load, not during refreshes
+      if (products.length === 0) {
+        setIsLoading(true);
+      }
+
       // Check if Supabase client is properly initialized
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
+
       if (sessionError) {
         throw new Error('Authentication error: ' + sessionError.message);
       }
+
+      console.log('Fetching products with sort:', sortBy, sortOrder);
 
       const { data: productsData, error: productsError } = await supabase
         .from('products')
@@ -67,22 +83,41 @@ export const ProductList: React.FC = () => {
         `)
         .order(sortBy, { ascending: sortOrder === 'asc' });
 
-      if (productsError) throw productsError;
+      if (productsError) {
+        console.error('Error fetching products:', productsError);
+        throw productsError;
+      }
 
       if (!productsData) {
+        console.error('No product data received from database');
         throw new Error('No data received from database');
+      }
+
+      console.log('Fetched products:', productsData.length);
+
+      // Check if we have new products that weren't in the previous state
+      const newProductCount = productsData.filter(
+        newProduct => !products.some(existingProduct => existingProduct.id === newProduct.id)
+      ).length;
+
+      if (newProductCount > 0 && products.length > 0) {
+        toast.info(`${newProductCount} new product(s) added`);
       }
 
       setProducts(productsData as Product[]);
     } catch (error: unknown) {
       console.error('Error fetching products:', error);
-      
-      if (error instanceof Error) {
-        toast.error(error.message);
-      } else if ((error as PostgrestError)?.message) {
-        toast.error((error as PostgrestError).message);
+
+      // Only show error toasts on initial load, not during background refreshes
+      if (products.length === 0) {
+        if (error instanceof Error) {
+          toast.error(error.message);
+        } else if ((error as PostgrestError)?.message) {
+          toast.error((error as PostgrestError).message);
+        } else {
+          toast.error('Failed to load products. Please try again later.');
+        }
       }
-      toast.error('Failed to load products. Please try again later.');
     } finally {
       setIsLoading(false);
     }

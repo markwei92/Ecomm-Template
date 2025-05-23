@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Trash2, Plus, Loader, Upload, Check, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { uploadProductImage } from '../../lib/supabase-storage';
-import { Size, Color } from '../../types';
+import { Size, Color, ProductCategory, ProductCategoryObject } from '../../types';
 
 interface ProductVariant {
   size: Size;
@@ -37,6 +37,10 @@ export const EditProduct: React.FC = () => {
   const [images, setImages] = useState<ProductImage[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<number, number>>({});
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>(''); // Changed to store UUID
+  const [selectedCategorySlug, setSelectedCategorySlug] = useState<ProductCategory>('t-shirts'); // Added to store slug for UI
+  const [categories, setCategories] = useState<ProductCategoryObject[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [error, setError] = useState<string>('');
   const [isColorPanelOpen, setIsColorPanelOpen] = useState<number | null>(null);
   const colorPanelRef = useRef<HTMLDivElement>(null);
@@ -162,6 +166,69 @@ export const EditProduct: React.FC = () => {
     fetchThemes();
   }, []);
 
+  // Fetch categories from database
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setIsLoadingCategories(true);
+        console.log('Fetching product categories from database...');
+
+        // Fetch categories from the product_categories table
+        const { data, error } = await supabase
+          .from('product_categories')
+          .select('id, name, slug, description, created_at, updated_at')
+          .order('created_at');
+
+        if (error) {
+          console.error('Error fetching product categories:', error);
+          // If the error is related to the table not existing, we'll handle it gracefully
+          if (error.message.includes('does not exist') || error.message.includes('schema')) {
+            console.log('Product categories table does not exist yet. Using default categories.');
+            const defaultCategory = {
+              id: '1',
+              name: 'T-Shirts',
+              slug: 't-shirts',
+              created_at: new Date().toISOString()
+            };
+            setCategories([defaultCategory]);
+            return;
+          }
+          throw error;
+        }
+
+        console.log('Successfully fetched product categories:', data);
+
+        if (data && data.length > 0) {
+          setCategories(data);
+        } else {
+          console.log('No categories found in database, using default');
+          // If no categories found, add 't-shirts' as default
+          const defaultCategory = {
+            id: '1',
+            name: 'T-Shirts',
+            slug: 't-shirts',
+            created_at: new Date().toISOString()
+          };
+          setCategories([defaultCategory]);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        // Fallback to default categories if there's an error
+        const defaultCategory = {
+          id: '1',
+          name: 'T-Shirts',
+          slug: 't-shirts',
+          created_at: new Date().toISOString()
+        };
+        setCategories([defaultCategory]);
+      } finally {
+        setIsLoadingCategories(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
   const sizesByAgeGroup = {
     adults: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
     kids: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
@@ -205,8 +272,11 @@ export const EditProduct: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchProduct();
-  }, [id]);
+    // Only fetch the product after categories have been loaded
+    if (categories.length > 0) {
+      fetchProduct();
+    }
+  }, [id, categories]);
 
   const fetchProduct = async () => {
     try {
@@ -243,6 +313,18 @@ export const EditProduct: React.FC = () => {
       setPrice(product.price.toString());
       setSelectedThemes(product.themes || []);
       setCanPersonalize(product.can_personalize || false);
+
+      // Store the category ID
+      setSelectedCategory(product.category || '');
+
+      // Find the category slug for the UI
+      const categoryObj = categories.find(cat => cat.id === product.category);
+      if (categoryObj) {
+        setSelectedCategorySlug(categoryObj.slug);
+      } else {
+        // Default to t-shirts if category not found
+        setSelectedCategorySlug('t-shirts');
+      }
 
       setImages(product.product_images.map((img: any) => ({
         url: img.url,
@@ -288,6 +370,7 @@ export const EditProduct: React.FC = () => {
         price: parseFloat(price),
         themes: selectedThemes,
         age_group: variants[0]?.ageGroup || 'adults',
+        category: selectedCategory, // This is now the UUID
         updated_at: new Date().toISOString()
       };
 
@@ -440,6 +523,37 @@ export const EditProduct: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+              {isLoadingCategories ? (
+                <div className="flex items-center space-x-2 h-10">
+                  <Loader className="w-5 h-5 animate-spin text-gray-500" />
+                  <span className="text-sm text-gray-500">Loading categories...</span>
+                </div>
+              ) : (
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => {
+                    const categoryId = e.target.value;
+                    setSelectedCategory(categoryId);
+
+                    // Also update the slug for UI consistency
+                    const category = categories.find(cat => cat.id === categoryId);
+                    if (category) {
+                      setSelectedCategorySlug(category.slug);
+                    }
+                  }}
+                  className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-black focus:border-black sm:text-sm"
+                >
+                  {categories.map(category => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Themes</label>
               <div className="border border-gray-200 rounded-lg p-4 max-h-[240px] overflow-y-auto">

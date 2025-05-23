@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import toast from '../../utils/toastInterceptor';
 
 import { useToastSettings } from '../../context/ToastSettingsContext';
+import { SimpleProductCategorySettings } from '../../components/admin/SimpleProductCategorySettings';
 
 interface Coupon {
   id: string;
@@ -278,6 +279,11 @@ export const SettingsPage: React.FC = () => {
     <div className="max-w-4xl mx-auto py-12 px-4">
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Settings</h1>
+      </div>
+
+      {/* Product Categories Section */}
+      <div className="mb-8">
+        <SimpleProductCategorySettings isAuthenticated={true} />
       </div>
 
       {/* Toast Notifications Section */}

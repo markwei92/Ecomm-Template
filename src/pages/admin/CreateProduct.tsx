@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Trash2, Plus, Loader, Upload, Check, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { uploadProductImage } from '../../lib/supabase-storage';
-import { Size, Color } from '../../types';
+import { Size, Color, ProductCategory, ProductCategoryObject } from '../../types';
+import { toast } from 'react-toastify';
 
 interface ProductVariant {
   size: Size;
@@ -37,6 +38,10 @@ export const CreateProduct: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState<Record<number, number>>({});
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
   const [selectedCollections, setSelectedCollections] = useState<string[]>(['adults']);
+  const [selectedCategorySlug, setSelectedCategorySlug] = useState<ProductCategory>('t-shirts');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  const [categories, setCategories] = useState<ProductCategoryObject[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [error, setError] = useState<string>('');
   const [isColorPanelOpen, setIsColorPanelOpen] = useState<number | null>(null);
   const colorPanelRef = useRef<HTMLDivElement>(null);
@@ -92,6 +97,92 @@ export const CreateProduct: React.FC = () => {
     fetchThemes();
   }, []);
 
+  // Fetch categories from database
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setIsLoadingCategories(true);
+        console.log('Fetching product categories from database...');
+
+        // Fetch categories from the product_categories table
+        const { data, error } = await supabase
+          .from('product_categories')
+          .select('id, name, slug, description, created_at, updated_at')
+          .order('created_at');
+
+        if (error) {
+          console.error('Error fetching product categories:', error);
+          // If the error is related to the table not existing, we'll handle it gracefully
+          if (error.message.includes('does not exist') || error.message.includes('schema')) {
+            console.log('Product categories table does not exist yet. Using default categories.');
+            const defaultCategory = {
+              id: '1',
+              name: 'T-Shirts',
+              slug: 't-shirts',
+              created_at: new Date().toISOString()
+            };
+            setCategories([defaultCategory]);
+            setSelectedCategorySlug('t-shirts');
+            return;
+          }
+          throw error;
+        }
+
+        console.log('Successfully fetched product categories:', data);
+
+        // Log each category with its ID and validate UUID format
+        data.forEach(category => {
+          const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(category.id);
+          console.log(`Category: ${category.name}, ID: ${category.id}, Slug: ${category.slug}, Valid UUID: ${isValidUUID}`);
+
+          if (!isValidUUID) {
+            console.warn(`Category "${category.name}" has an invalid UUID: ${category.id}`);
+          }
+        });
+
+        if (data && data.length > 0) {
+          setCategories(data);
+          // Set the first category as selected by default
+          setSelectedCategorySlug(data[0].slug);
+          setSelectedCategoryId(data[0].id);
+          console.log('Selected category:', data[0].name, 'with ID:', data[0].id, 'and slug:', data[0].slug);
+        } else {
+          console.log('No categories found in database, using default');
+          // If no categories found, add 't-shirts' as default
+          // Use a proper UUID for the default category
+          const defaultCategoryId = '00000000-0000-0000-0000-000000000001';
+          const defaultCategory = {
+            id: defaultCategoryId,
+            name: 'T-Shirts',
+            slug: 't-shirts',
+            created_at: new Date().toISOString()
+          };
+          setCategories([defaultCategory]);
+          setSelectedCategorySlug('t-shirts');
+          setSelectedCategoryId(defaultCategoryId);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        // Fallback to default categories if there's an error
+        // Use a proper UUID for the default category
+        const defaultCategoryId = '00000000-0000-0000-0000-000000000001';
+        const defaultCategory = {
+          id: defaultCategoryId,
+          name: 'T-Shirts',
+          slug: 't-shirts',
+          created_at: new Date().toISOString()
+        };
+        setCategories([defaultCategory]);
+        setSelectedCategorySlug('t-shirts');
+        setSelectedCategoryId(defaultCategoryId);
+      } finally {
+        setIsLoadingCategories(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
   const sizesByAgeGroup = {
     adults: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
     kids: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
@@ -139,59 +230,158 @@ export const CreateProduct: React.FC = () => {
     setIsSubmitting(true);
     setError('');
 
+    // Validate required fields
+    if (!title.trim()) {
+      setError('Product title is required');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!price || parseFloat(price) <= 0) {
+      setError('Please enter a valid price');
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Validate that at least one color is selected for each variant
+    const hasEmptyColorVariants = variants.some(variant => variant.colors.length === 0);
+    if (hasEmptyColorVariants) {
+      setError('Please select at least one color for each variant');
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       // Get the age group from the first variant
       const ageGroup = variants[0]?.ageGroup || 'adults';
 
       // Create new product
-      // First, check if can_personalize column exists
+      // First, check if necessary columns exist
       try {
-        // Try to create the column if it doesn't exist
+        // Try to create the columns if they don't exist
         await supabase.rpc('execute_sql', {
-          sql: 'ALTER TABLE products ADD COLUMN IF NOT EXISTS can_personalize boolean DEFAULT false;'
+          sql: `
+            ALTER TABLE products ADD COLUMN IF NOT EXISTS can_personalize boolean DEFAULT false;
+          `
         });
+        console.log('Successfully added can_personalize column to products table');
       } catch (e) {
-        console.log('Could not add column via RPC, continuing with insert');
+        console.log('Could not add columns via RPC, continuing with insert:', e);
       }
 
+      // Show a toast to indicate the product creation has started
+      toast.info('Creating product...', { autoClose: false, toastId: 'creating-product' });
+
+      // Create the base product data
       const productData: any = {
         title,
         description,
         price: parseFloat(price),
         themes: selectedThemes,
         age_group: ageGroup,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
+
+      // Check if the selected category ID is a valid UUID
+      const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedCategoryId);
+
+      if (isValidUUID) {
+        // If it's a valid UUID, use it for the category field
+        productData.category = selectedCategoryId;
+        console.log('Using category ID (valid UUID):', selectedCategoryId);
+      } else {
+        // If it's not a valid UUID, try to find the category with this slug
+        const category = categories.find(cat => cat.slug === selectedCategorySlug);
+
+        if (category && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(category.id)) {
+          // If we found the category and its ID is a valid UUID, use that
+          productData.category = category.id;
+          console.log('Using category ID from slug lookup:', category.id);
+        } else {
+          // As a last resort, use a default UUID
+          const defaultUUID = '00000000-0000-0000-0000-000000000001';
+          productData.category = defaultUUID;
+          console.log('Using default UUID for category:', defaultUUID);
+
+          // Show a warning
+          toast.warning('Using default category ID because the selected category has an invalid ID');
+        }
+      }
+
+      console.log('Creating product with category ID (UUID):', selectedCategoryId);
 
       // Only add can_personalize if it's true to avoid schema errors
       if (canPersonalize) {
         productData.can_personalize = true;
       }
 
-      const { data: product, error: productError } = await supabase
-        .from('products')
-        .insert(productData)
-        .select()
-        .single();
+      console.log('Creating product with data:', productData);
 
-      if (productError) throw productError;
+      // Try to insert the product - simplified approach
+      let product;
+      try {
+        console.log('Attempting to insert product with data:', productData);
+
+        const { data, error: productError } = await supabase
+          .from('products')
+          .insert(productData)
+          .select()
+          .single();
+
+        if (productError) {
+          console.error('Error inserting product:', productError);
+          throw productError;
+        }
+
+        product = data;
+        console.log('Product inserted successfully:', product);
+      } catch (error) {
+        console.error('Error in product insertion:', error);
+        throw error;
+      }
+
+      if (!product || !product.id) {
+        throw new Error('Failed to create product: No product ID returned');
+      }
+
+      console.log('Product created successfully:', product);
+
+      // Update toast to show progress
+      toast.update('creating-product', {
+        render: 'Product created. Uploading images...',
+        autoClose: false
+      });
 
       // Handle image uploads
       const imagePromises = images
         .filter(img => img.file)
         .map(async (img) => {
           if (!img.file) return;
-          const url = await uploadProductImage(img.file, product.id);
-          return supabase
-            .from('product_images')
-            .insert({
-              product_id: product.id,
-              url,
-              color: img.color,
-              is_primary: img.isPrimary
-            });
+          try {
+            const url = await uploadProductImage(img.file, product.id);
+            console.log('Image uploaded:', url);
+            return supabase
+              .from('product_images')
+              .insert({
+                product_id: product.id,
+                url,
+                color: img.color,
+                is_primary: img.isPrimary
+              });
+          } catch (error) {
+            console.error('Error uploading image:', error);
+            throw error;
+          }
         });
 
       await Promise.all(imagePromises);
+
+      // Update toast to show progress
+      toast.update('creating-product', {
+        render: 'Images uploaded. Creating variants...',
+        autoClose: false
+      });
 
       // Get sizes based on age group
       const sizes = sizesByAgeGroup[ageGroup as keyof typeof sizesByAgeGroup];
@@ -209,15 +399,35 @@ export const CreateProduct: React.FC = () => {
         )
       );
 
+      console.log('Creating variants:', variantPromises.length);
+
       const { error: variantsError } = await supabase
         .from('product_variants')
         .insert(variantPromises);
 
-      if (variantsError) throw variantsError;
+      if (variantsError) {
+        console.error('Error creating variants:', variantsError);
+        throw variantsError;
+      }
 
+      // Close the creating product toast
+      toast.dismiss('creating-product');
+
+      // Show success message
+      toast.success('Product created successfully!');
+
+      // Navigate to the product list page
       navigate('/admin/products');
     } catch (error: any) {
       console.error('Error creating product:', error);
+
+      // Dismiss the creating product toast
+      toast.dismiss('creating-product');
+
+      // Show error toast
+      toast.error(error.message || 'Failed to create product');
+
+      // Set error message in the UI
       setError(error.message || 'Failed to create product');
     } finally {
       setIsSubmitting(false);
@@ -266,12 +476,8 @@ export const CreateProduct: React.FC = () => {
     // Update selectedCollections when ageGroup changes
     if (field === 'ageGroup') {
       setSelectedCollections([value]);
-
-      // Update all variants to use the same ageGroup
-      setVariants(prev => prev.map(variant => ({
-        ...variant,
-        ageGroup: value
-      })));
+      // We no longer update all variants to the same age group
+      // This allows each variant to have its own age group
     }
   };
 
@@ -365,6 +571,49 @@ export const CreateProduct: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+              {isLoadingCategories ? (
+                <div className="flex items-center space-x-2 h-10">
+                  <Loader className="w-5 h-5 animate-spin text-gray-500" />
+                  <span className="text-sm text-gray-500">Loading categories...</span>
+                </div>
+              ) : (
+                <select
+                  value={selectedCategorySlug}
+                  onChange={(e) => {
+                    const selectedSlug = e.target.value as ProductCategory;
+                    setSelectedCategorySlug(selectedSlug);
+                    // Find the category ID that matches the selected slug
+                    const selectedCategory = categories.find(cat => cat.slug === selectedSlug);
+                    if (selectedCategory) {
+                      setSelectedCategoryId(selectedCategory.id);
+                      console.log('Selected category ID:', selectedCategory.id, 'for slug:', selectedSlug);
+
+                      // Validate that the ID is a proper UUID
+                      const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedCategory.id);
+                      console.log('Is valid UUID?', isValidUUID);
+
+                      if (!isValidUUID) {
+                        // Show a warning toast
+                        toast.warning(`Category ID for "${selectedCategory.name}" is not a valid UUID. This may cause errors when creating products.`);
+                      }
+                    } else {
+                      console.error('Could not find category with slug:', selectedSlug);
+                      toast.error(`Could not find category with slug: ${selectedSlug}`);
+                    }
+                  }}
+                  className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-black focus:border-black sm:text-sm"
+                >
+                  {categories.map(category => (
+                    <option key={category.id} value={category.slug}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Themes</label>
               <div className="border border-gray-200 rounded-lg p-4 max-h-[240px] overflow-y-auto">

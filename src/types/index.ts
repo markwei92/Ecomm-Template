@@ -24,13 +24,26 @@ export interface Product {
   sizes: Size[];
   createdAt: string;
   canPersonalize?: boolean;
+  category?: string; // Added category field
 }
+
+export interface ProductCategoryObject {
+  id: string;
+  name: string;
+  slug: string;
+  created_at?: string;
+  updated_at?: string;
+  description?: string;
+}
+
+export type ProductCategory = string; // This is the slug of the category
 
 export interface FilterState {
   styles: Theme[];
   theme: string;
   color: string;
   ageGroups: AgeGroup[];
+  categories: ProductCategory[];
   searchQuery: string;
   sortBy: string;
 }

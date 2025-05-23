@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ShoppingBag, CreditCard, Loader, ArrowLeft, Check, X, Plus, Minus, Trash2 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { createPaymentIntent, PaymentIntentResponse, validatePromoCode } from '../lib/stripe';
+import { PaymentIntentResponse, validatePromoCode, createPaymentIntentWithFixedShipping } from '../lib/stripe';
 import { toast } from 'react-toastify';
 import { supabase } from '../lib/supabase';
 import { createOrderFromPaymentIntent, debugStripeOrdersTable } from '../lib/orders';
@@ -62,7 +62,9 @@ export const CheckoutPage: React.FC = () => {
     if (state.items.length === 0) return 0;
     const totalItems = state.items.reduce((sum, item) => sum + item.quantity, 0);
     // Calculate shipping in dollars (not cents)
-    return (shippingCost.base_price + (Math.max(0, totalItems - 1) * shippingCost.additional_item_price)) / 100;
+    const shippingAmount = (shippingCost.base_price + (Math.max(0, totalItems - 1) * shippingCost.additional_item_price)) / 100;
+    console.log(`SHIPPING CALCULATION: Base price: ${shippingCost.base_price / 100}, Additional price: ${shippingCost.additional_item_price / 100}, Total items: ${totalItems}, Final shipping: ${shippingAmount}`);
+    return shippingAmount;
   };
 
   const handleApplyPromoCode = async () => {
@@ -75,15 +77,32 @@ export const CheckoutPage: React.FC = () => {
     setPromoMessage('');
 
     try {
+      console.log('Validating promo code:', promoCode);
       const result = await validatePromoCode(promoCode);
+      console.log('Promo code validation result:', result);
 
       if (result.valid) {
         setPromoCodeValid(true);
         setPromoMessage(result.message || 'Promo code applied successfully!');
+        // Make sure we use the correct type for the discount
+        const discountType = result.discountType === 'percentage' || result.discountType === 'fixed_amount'
+          ? result.discountType
+          : '';
+
         setDiscount({
-          type: result.discountType || '',
+          type: discountType,
           amount: result.discountAmount || 0
         });
+        console.log('Set discount to:', { type: discountType, amount: result.discountAmount || 0 });
+
+        // Calculate and log the discount amount
+        const calculatedDiscount = result.discountType === 'percentage'
+          ? (subtotal * (result.discountAmount || 0)) / 100
+          : Math.min(result.discountAmount || 0, subtotal);
+        console.log('Calculated discount amount:', calculatedDiscount);
+
+        // Show a toast notification
+        toast.success(`Promo code applied: ${result.message}`);
       } else {
         setPromoCodeValid(false);
         setPromoMessage(result.message || 'Invalid promo code');
@@ -91,6 +110,7 @@ export const CheckoutPage: React.FC = () => {
           type: '',
           amount: 0
         });
+        toast.error(result.message || 'Invalid promo code');
       }
     } catch (error: any) {
       console.error('Error validating promo code:', error);
@@ -100,22 +120,30 @@ export const CheckoutPage: React.FC = () => {
         type: '',
         amount: 0
       });
+      toast.error(error.message || 'Failed to validate promo code');
     } finally {
       setIsValidatingPromo(false);
     }
   };
 
   const calculateDiscount = (subtotal: number) => {
-    if (!promoCodeValid || !discount.amount) return 0;
+    if (!promoCodeValid || !discount.amount) {
+      console.log('No discount applied - promoCodeValid:', promoCodeValid, 'discount:', discount);
+      return 0;
+    }
+
+    let discountAmount = 0;
 
     if (discount.type === 'percentage') {
       // Calculate exact percentage without rounding
-      return (subtotal * discount.amount) / 100;
+      discountAmount = (subtotal * discount.amount) / 100;
+      console.log(`Calculating percentage discount: ${discount.amount}% of $${subtotal} = $${discountAmount}`);
     } else if (discount.type === 'fixed_amount') {
-      return Math.min(discount.amount, subtotal); // Don't allow discount to exceed subtotal
+      discountAmount = Math.min(discount.amount, subtotal); // Don't allow discount to exceed subtotal
+      console.log(`Calculating fixed discount: $${discount.amount}, limited to subtotal $${subtotal} = $${discountAmount}`);
     }
 
-    return 0;
+    return discountAmount;
   };
 
   const subtotal = state.items.reduce((sum, item) =>
@@ -128,7 +156,13 @@ export const CheckoutPage: React.FC = () => {
   const shipping = calculateShipping();
   const finalTotal = discountedSubtotal + shipping;
 
-  const updateQuantity = async (itemId: string, newQuantity: number) => {
+  const updateQuantity = async (itemId: string | undefined, newQuantity: number) => {
+    // If itemId is undefined, we can't update the quantity
+    if (!itemId) {
+      console.error('Cannot update quantity: itemId is undefined');
+      return;
+    }
+
     // Check if user is authenticated
     const { data: { session } } = await supabase.auth.getSession();
     const customUser = localStorage.getItem('user');
@@ -219,9 +253,9 @@ export const CheckoutPage: React.FC = () => {
       const shippingAmount = calculateShipping();
       console.log('Creating payment intent with items:', items, 'and shipping cost:', shippingAmount);
 
-      // Create a payment intent for Stripe Elements
-      const intent = await createPaymentIntent(items, promoCode, undefined, shippingAmount);
-      console.log('Payment intent created:', intent,
+      // Create a payment intent with fixed shipping cost to ensure correct display
+      const intent = await createPaymentIntentWithFixedShipping(items, promoCode, undefined, shippingAmount);
+      console.log('Payment intent created with fixed shipping:', intent,
         promoCode ? `with promo code: ${promoCode}` : 'without promo code',
         `and shipping cost: $${shippingAmount.toFixed(2)}`
       );
@@ -254,6 +288,35 @@ export const CheckoutPage: React.FC = () => {
       const orderDiscount = calculateDiscount(orderSubtotal);
       const discountedSubtotal = orderSubtotal - orderDiscount;
       const totalAmount = discountedSubtotal + shipping; // Add shipping cost to the total
+
+      // Debug logging for discount information
+      console.log('🔍 DEBUG - Order creation details:', {
+        orderSubtotal,
+        promoCodeValid,
+        promoCode,
+        discountType: discount.type,
+        discountAmount: discount.amount,
+        calculatedDiscount: orderDiscount,
+        discountedSubtotal,
+        shipping,
+        totalAmount,
+        discountPercentage: discount.type === 'percentage' ? parseInt(discount.amount.toString()) : null
+      });
+
+      // Log what will be saved to database
+      const discountDataToSave = promoCodeValid ? {
+        discount_amount: Math.round(orderDiscount * 100),
+        discount_type: discount.type,
+        promo_code: promoCode,
+        discount_percentage: discount.type === 'percentage' ? parseInt(discount.amount.toString()) : null
+      } : {
+        discount_amount: 0,
+        discount_type: null,
+        promo_code: null,
+        discount_percentage: null
+      };
+
+      console.log('🔍 DEBUG - Discount data that will be saved to database:', discountDataToSave);
 
       // Get shipping address from localStorage if available
       let shippingAddress = null;
@@ -313,8 +376,20 @@ export const CheckoutPage: React.FC = () => {
         // Log the shipping address for debugging
         console.log('Guest order shipping address:', shippingAddress);
 
-        // Create order data
-        const orderData = {
+        // Create order data with discount info embedded in items metadata
+        const itemsWithDiscount = promoCodeValid ? {
+          items: items,
+          discount_info: {
+            discount_amount: Math.round(orderDiscount * 100),
+            discount_type: discount.type,
+            promo_code: promoCode,
+            discount_percentage: discount.type === 'percentage' ? parseInt(discount.amount.toString()) : null,
+            original_subtotal: Math.round(subtotal * 100),
+            final_total: Math.round(totalAmount * 100)
+          }
+        } : items;
+
+        const basicOrderData = {
           user_id: guestUuid, // Use a valid UUID
           customer_id: guestCustomerId,
           payment_intent_id: paymentIntentId,
@@ -322,25 +397,31 @@ export const CheckoutPage: React.FC = () => {
           currency: 'usd',
           payment_status: 'succeeded',
           status: 'completed',
-          items: items,
+          items: itemsWithDiscount, // This now includes discount info if applicable
           shipping_cost: Math.round(shipping * 100), // Add shipping cost in cents
-          discount_amount: Math.round(orderDiscount * 100), // Add discount in cents (exact amount, no rounding)
-          discount_type: promoCodeValid ? discount.type : null,
-          promo_code: promoCodeValid ? promoCode : null,
           shipping_address: shippingAddress,
-          discount_percentage: promoCodeValid && discount.type === 'percentage' ?
-            parseInt(discount.amount.toString()) : null,
           is_guest: true, // This is the key flag that identifies a guest order
           customer_email: shippingAddress?.email || null
         };
 
-        console.log('Creating guest order with data:', JSON.stringify(orderData, null, 2));
+        console.log('🔍 GUEST ORDER - Creating guest order with embedded discount data:', JSON.stringify(basicOrderData, null, 2));
 
         // Create the order directly in the database
         const { data: order, error } = await supabase
           .from('stripe_orders')
-          .insert(orderData)
+          .insert(basicOrderData)
           .select();
+
+        console.log('🔍 GUEST ORDER - Database insert result:', { order, error });
+
+        if (error) {
+          console.error('🔍 GUEST ORDER - Detailed error:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+          });
+        }
 
         if (error) {
           console.error('Error creating guest order:', error);
@@ -349,7 +430,7 @@ export const CheckoutPage: React.FC = () => {
           try {
             console.log('Trying RPC approach for guest order');
             const { error: rpcError } = await supabase.rpc('create_guest_order', {
-              order_data: orderData
+              order_data: basicOrderData
             });
 
             if (rpcError) {
@@ -360,8 +441,10 @@ export const CheckoutPage: React.FC = () => {
           } catch (rpcError) {
             console.error('Exception in RPC approach:', rpcError);
           }
+        } else if (order && order.length > 0) {
+          console.log('✅ Guest order created successfully with embedded discount data:', order[0]);
         } else {
-          console.log('Successfully created guest order:', order);
+          console.log('Guest order creation returned unexpected result:', order);
         }
       } else {
         console.log('Creating authenticated user order in the database');
@@ -372,38 +455,74 @@ export const CheckoutPage: React.FC = () => {
           return;
         }
 
+        // Create order data with discount info embedded in items metadata for authenticated user
+        const authItemsWithDiscount = promoCodeValid ? {
+          items: items,
+          discount_info: {
+            discount_amount: Math.round(orderDiscount * 100),
+            discount_type: discount.type,
+            promo_code: promoCode,
+            discount_percentage: discount.type === 'percentage' ? parseInt(discount.amount.toString()) : null,
+            original_subtotal: Math.round(subtotal * 100),
+            final_total: Math.round(totalAmount * 100)
+          }
+        } : items;
+
+        const basicAuthOrderData = {
+          user_id: user.id,
+          customer_id: `cus_${user.id.substring(0, 8)}`,
+          payment_intent_id: paymentIntentId,
+          amount_total: Math.round(totalAmount * 100), // Convert to cents
+          currency: 'usd',
+          payment_status: 'succeeded',
+          status: 'completed',
+          items: authItemsWithDiscount, // This now includes discount info if applicable
+          shipping_cost: Math.round(shipping * 100), // Add shipping cost in cents
+          shipping_address: shippingAddress,
+          is_guest: false
+        };
+
+        console.log('🔍 AUTH ORDER - Creating authenticated user order with embedded discount data:', JSON.stringify(basicAuthOrderData, null, 2));
+
         // Create the order directly in the database for authenticated user
         const { data: order, error } = await supabase
           .from('stripe_orders')
-          .insert({
-            user_id: user.id,
-            customer_id: `cus_${user.id.substring(0, 8)}`,
-            payment_intent_id: paymentIntentId,
-            amount_total: Math.round(totalAmount * 100), // Convert to cents
-            currency: 'usd',
-            payment_status: 'succeeded',
-            status: 'completed',
-            items: items,
-            shipping_cost: Math.round(shipping * 100), // Add shipping cost in cents
-            discount_amount: orderDiscount * 100, // Add discount in cents (exact amount, no rounding)
-            discount_type: promoCodeValid ? discount.type : null,
-            promo_code: promoCodeValid ? promoCode : null,
-            shipping_address: shippingAddress,
-            discount_percentage: promoCodeValid && discount.type === 'percentage' ?
-              parseInt(discount.amount.toString()) : null,
-            is_guest: false
-          })
+          .insert(basicAuthOrderData)
           .select();
+
+        console.log('🔍 AUTH ORDER - Database insert result:', { order, error });
+
+        if (error) {
+          console.error('🔍 AUTH ORDER - Detailed error:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+          });
+        }
 
         if (error) {
           console.error('Error creating order directly:', error);
 
           // Try a fallback approach
           console.log('Trying fallback approach with createOrderFromPaymentIntent');
+
+          // Create discount info object for the fallback approach
+          const discountInfo = promoCodeValid ? {
+            discount_amount: Math.round(orderDiscount * 100),
+            discount_type: discount.type,
+            promo_code: promoCode,
+            discount_percentage: discount.type === 'percentage' ? parseInt(discount.amount.toString()) : null
+          } : undefined;
+
+          console.log('Fallback approach discount info:', discountInfo);
+
           const fallbackOrder = await createOrderFromPaymentIntent(
             paymentIntentId,
             totalAmount,
-            items
+            items,
+            discountInfo,
+            shipping
           );
 
           if (fallbackOrder) {
@@ -411,8 +530,10 @@ export const CheckoutPage: React.FC = () => {
           } else {
             console.error('Both direct and fallback approaches failed');
           }
+        } else if (order && order.length > 0) {
+          console.log('✅ Auth order created successfully with embedded discount data:', order[0]);
         } else {
-          console.log('Order created successfully:', order);
+          console.log('Auth order creation returned unexpected result:', order);
         }
       }
 
@@ -685,6 +806,7 @@ export const CheckoutPage: React.FC = () => {
                       clientSecret={paymentIntent.clientSecret}
                       onSuccess={handlePaymentSuccess}
                       onCancel={() => setPaymentIntent(null)}
+                      shippingCost={shipping} // Pass the shipping cost
                     />
                   </div>
                 </div>

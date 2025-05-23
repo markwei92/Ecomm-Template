@@ -42,6 +42,7 @@ import { EditProduct } from './pages/admin/EditProduct';
 import { StoreFront } from './pages/admin/StoreFront';
 import { MailingList } from './pages/admin/MailingList';
 import { ReviewsList } from './pages/admin/ReviewsList';
+import DiagnosticPage from './pages/admin/DiagnosticPage';
 import TestLoginDebug from './components/TestLoginDebug';
 import FixedLoginDebugPage from './pages/FixedLoginDebugPage';
 import PasswordDebugPage from './pages/PasswordDebugPage';
@@ -49,6 +50,7 @@ import AdminUserDebugPage from './pages/AdminUserDebugPage';
 import UserManagementDebugPage from './pages/UserManagementDebugPage';
 import OrderDiagnosticPage from './pages/OrderDiagnosticPage';
 import ReviewDebugPage from './pages/ReviewDebugPage';
+import { DiscountDebugPage } from './pages/DiscountDebugPage';
 
 // Component to conditionally render the footer
 const AppLayout = () => {
@@ -89,6 +91,8 @@ const AppLayout = () => {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/order-diagnostic" element={<OrderDiagnosticPage />} />
             <Route path="/review-debug" element={<ReviewDebugPage />} />
+            <Route path="/db-diagnostic" element={<DiagnosticPage />} />
+            <Route path="/discount-debug" element={<DiscountDebugPage />} />
 
             {/* TEMPORARY: Direct access to admin dashboard */}
             <Route path="/admin-access" element={

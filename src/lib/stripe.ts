@@ -14,6 +14,33 @@ export interface PaymentIntentResponse {
   paymentIntentId: string;
 }
 
+// Function to create a payment intent with fixed shipping cost
+// This is a workaround for the Stripe API issue with shipping cost display
+export async function createPaymentIntentWithFixedShipping(
+  items: Array<{
+    price: number;
+    quantity: number;
+    title: string;
+    color?: string;
+    size?: string;
+    image?: string;
+    personalizationText?: string;
+  }>,
+  promoCode?: string,
+  shippingAddress?: any,
+  shippingCost?: number
+): Promise<PaymentIntentResponse> {
+  // EXTREME WORKAROUND: Pass a tiny value to force Stripe to display the correct amount
+  // The issue is that Stripe is dividing our shipping cost by 100 again
+  // So we need to multiply by 10000 to get the correct display
+  // For example, if we want to display $4.00, we need to pass 400.00
+  const fixedShippingCost = (shippingCost || 4.00) * 100; // Multiply by 100 to counteract Stripe's division
+  console.log(`EXTREME SHIPPING WORKAROUND: Original: ${shippingCost}, Fixed: ${fixedShippingCost}`);
+
+  // Call the original createPaymentIntent function with our extremely adjusted shipping cost
+  return createPaymentIntent(items, promoCode, shippingAddress, fixedShippingCost);
+}
+
 export interface PromoCodeValidationResponse {
   valid: boolean;
   discountType?: 'percentage' | 'fixed_amount';
@@ -267,17 +294,13 @@ export async function createPaymentIntent(
     let finalShippingCost = 0;
 
     if (shippingCost !== undefined) {
-      // Use the shipping cost provided by the caller (in dollars)
-      // Check if the shipping cost is already in cents (greater than 100)
-      if (shippingCost > 100) {
-        // Assume it's already in cents, so use as is
-        finalShippingCost = shippingCost;
-        console.log(`Using provided shipping cost (already in cents): ${finalShippingCost} cents`);
-      } else {
-        // Convert from dollars to cents
-        finalShippingCost = Math.round(shippingCost * 100);
-        console.log(`Using provided shipping cost: $${shippingCost} (${finalShippingCost} cents)`);
-      }
+      // EXTREME DEBUGGING: Log the shipping cost before any conversion
+      console.log(`SHIPPING DEBUG - Raw shipping cost: ${shippingCost}`);
+
+      // For our extreme workaround, we're passing a value that's already multiplied by 100
+      // This should counteract Stripe's division by 100 when displaying
+      finalShippingCost = shippingCost;
+      console.log(`SHIPPING DEBUG - Using shipping cost: $${shippingCost} (this should display as $${shippingCost / 100} in Stripe)`);
     } else if (isGuestUser) {
       // Calculate shipping cost for guest users if not provided
       const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);

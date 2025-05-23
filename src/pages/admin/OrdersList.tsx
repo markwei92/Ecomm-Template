@@ -1097,7 +1097,7 @@ export const OrdersList: React.FC = () => {
                                           <div>
                                             <p className="font-medium">{item.title}</p>
                                             <p className="text-sm text-gray-500">
-                                              {item.quantity} x ${typeof item.price === 'number' ? item.price.toFixed(2) : '0.00'}
+                                              Qty: {item.quantity} • Price: ${typeof item.price === 'number' ? item.price.toFixed(2) : '0.00'}
                                             </p>
                                             {item.color && item.size && (
                                               <p className="text-sm text-gray-500">
@@ -1180,7 +1180,7 @@ export const OrdersList: React.FC = () => {
                                         <>
                                           <p className="text-sm font-medium">Subtotal: <span className="font-normal">${itemsTotal.toFixed(2)}</span></p>
                                           {discount > 0 && (
-                                            <p className="text-sm font-medium">Discount ({discountPercentage}%): <span className="font-normal">-${discount.toFixed(2)}</span></p>
+                                            <p className="text-sm font-medium">Discount: <span className="font-normal">({discountPercentage}%) -${discount.toFixed(2)}</span></p>
                                           )}
                                           <p className="text-sm font-medium">Shipping: <span className="font-normal">${shippingCost.toFixed(2)}</span></p>
                                           <p className="text-sm font-medium text-lg">Total: <span className="font-normal">${total.toFixed(2)}</span></p>
