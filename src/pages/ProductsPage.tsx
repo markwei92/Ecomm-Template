@@ -46,6 +46,7 @@ export const ProductsPage: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [categories, setCategories] = useState<{ name: string; slug: string }[]>([]);
 
   // Create a ref to track initial render
   const isInitialRender = useRef(true);
@@ -53,6 +54,28 @@ export const ProductsPage: React.FC = () => {
   useEffect(() => {
     fetchProducts();
   }, [filters]);
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('product_categories')
+        .select('name, slug')
+        .order('created_at');
+
+      if (error) {
+        console.error('Error fetching categories:', error);
+        return;
+      }
+
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -241,6 +264,45 @@ export const ProductsPage: React.FC = () => {
     setFilters(prev => ({ ...prev, sortBy: value }));
   };
 
+  const generateCollectionHeader = () => {
+    // If search query exists, show search results header
+    if (filters.searchQuery) {
+      return `Search Results`;
+    }
+
+    // If all categories are selected or no specific categories
+    if (filters.categories.includes('all') || filters.categories.length === 0) {
+      return 'Multiple Collection';
+    }
+
+    // If more than one category is selected
+    if (filters.categories.length > 1) {
+      return 'Multiple Collection';
+    }
+
+    // If exactly one category is selected
+    if (filters.categories.length === 1) {
+      const selectedCategorySlug = filters.categories[0];
+
+      // Find the category name from our fetched categories
+      const categoryData = categories.find(cat => cat.slug === selectedCategorySlug);
+
+      if (categoryData) {
+        return `${categoryData.name} Collection`;
+      }
+
+      // Fallback to formatted slug if category data not found
+      const formattedName = selectedCategorySlug
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+      return `${formattedName} Collection`;
+    }
+
+    // Default fallback
+    return 'Multiple Collection';
+  };
+
   return (
     <div className="min-h-screen bg-white">
       <main className="w-full px-4 sm:px-6 lg:px-8 py-8 mt-32">
@@ -333,7 +395,7 @@ export const ProductsPage: React.FC = () => {
               </button>
             </div>
 
-            <h1 className="text-3xl font-bold text-black mb-4">T-Shirts Collection</h1>
+            <h1 className="text-3xl font-bold text-black mb-4">{generateCollectionHeader()}</h1>
 
             {/* Sort and Description */}
             <div className="flex items-center justify-between mb-8">
