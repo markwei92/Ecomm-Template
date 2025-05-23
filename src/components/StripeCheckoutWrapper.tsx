@@ -4,7 +4,6 @@ import { SimpleStripeCheckout } from './SimpleStripeCheckout';
 import { useSupabase } from '../context/SupabaseContext';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
-import { CustomShippingDisplay } from './CustomShippingDisplay';
 
 export const StripeCheckoutWrapper: React.FC<{
   clientSecret: string;
@@ -174,9 +173,6 @@ export const StripeCheckoutWrapper: React.FC<{
 
   return (
     <div className="w-full max-w-md mx-auto">
-      {/* Display the correct shipping cost */}
-      <CustomShippingDisplay shippingCost={shippingCost} />
-
       <SimpleStripeCheckout
         clientSecret={clientSecret}
         onSuccess={handlePaymentSuccess}

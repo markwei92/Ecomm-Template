@@ -6,6 +6,7 @@ Fixed multiple display issues in the e-commerce application:
 2. **Shipping Cost Display**: Fixed shipping costs showing as `0.0y` instead of `y.00`
 3. **Stripe Payment Page**: Removed shipping cost notification and duplicate Email headers
 4. **Stripe Input Field Height**: Fixed text field height to properly display lowercase letters with descenders
+5. **Duplicate Shipping Display**: Removed duplicate shipping line in payment form
 
 ## Issue Description
 
@@ -19,6 +20,7 @@ After the discount fix, shipping costs were displaying as `0.0y` instead of `y.0
 1. **Shipping Cost Notification**: Unnecessary notification text "Note: The shipping cost will be applied correctly during payment processing."
 2. **Duplicate Email Headers**: Manual "Email" headers above `LinkAuthenticationElement` components created duplicate labels since Stripe automatically provides its own Email label.
 3. **Input Field Height**: Text fields were too short, causing lowercase letters with descenders (g, j, p, q, y) to be cut off and appear as different letters (e.g., "g" appearing as "q").
+4. **Duplicate Shipping Display**: The `CustomShippingDisplay` component was creating a duplicate shipping line below the main order summary, showing shipping cost twice in the payment form.
 
 ## Root Cause Analysis
 
@@ -211,7 +213,42 @@ appearance: {
 }
 ```
 
-### 6. CheckoutPage.tsx (Shipping Cost Fix)
+### 6. StripeCheckoutWrapper.tsx (Remove Duplicate Shipping Display)
+**Location:** `src/components/StripeCheckoutWrapper.tsx`
+**Lines Modified:** 7, 178
+
+**Before:**
+```tsx
+import { CustomShippingDisplay } from './CustomShippingDisplay';
+
+// In return statement:
+<div className="w-full max-w-md mx-auto">
+  {/* Display the correct shipping cost */}
+  <CustomShippingDisplay shippingCost={shippingCost} />
+
+  <SimpleStripeCheckout
+    clientSecret={clientSecret}
+    onSuccess={handlePaymentSuccess}
+    onCancel={onCancel}
+  />
+</div>
+```
+
+**After:**
+```tsx
+// Removed import for CustomShippingDisplay
+
+// In return statement:
+<div className="w-full max-w-md mx-auto">
+  <SimpleStripeCheckout
+    clientSecret={clientSecret}
+    onSuccess={handlePaymentSuccess}
+    onCancel={onCancel}
+  />
+</div>
+```
+
+### 7. CheckoutPage.tsx (Shipping Cost Fix)
 **Location:** `src/pages/CheckoutPage.tsx`
 **Lines Modified:** 18, 49-52, 65-71
 
@@ -316,8 +353,9 @@ const shippingAmount = shippingCost.base_price + (Math.max(0, totalItems - 1) * 
 1. **Removed shipping notification**: Eliminated unnecessary explanatory text that could undermine customer confidence
 2. **Fixed duplicate Email headers**: Removed manual headers since `LinkAuthenticationElement` provides its own label
 3. **Fixed input field height**: Added proper padding, minHeight, and lineHeight to prevent text cutoff
-4. **Improved UI cleanliness**: Streamlined payment form appearance
-5. **Maintained functionality**: All form validation and submission logic preserved
+4. **Removed duplicate shipping display**: Eliminated `CustomShippingDisplay` component that was creating duplicate shipping line
+5. **Improved UI cleanliness**: Streamlined payment form appearance
+6. **Maintained functionality**: All form validation and submission logic preserved
 
 ### Shipping Cost Fix
 1. **Updated default values** from cents (400, 100) to dollars (5.00, 2.50)
@@ -337,8 +375,9 @@ const shippingAmount = shippingCost.base_price + (Math.max(0, totalItems - 1) * 
 1. **Navigate to checkout** and verify no shipping cost notification appears
 2. **Check Email field** has only one "Email" label (from Stripe, not duplicate)
 3. **Test input field height** by typing text with lowercase letters (g, j, p, q, y) to ensure they display correctly
-4. **Test form submission** to ensure all functionality still works
-5. **Verify autofill** for logged-in users works correctly
+4. **Verify no duplicate shipping** - shipping should only appear once in the order summary above, not below the payment form
+5. **Test form submission** to ensure all functionality still works
+6. **Verify autofill** for logged-in users works correctly
 
 ### Shipping Cost Testing
 1. **Add items to cart** and verify shipping shows correct amount (e.g., $5.00 for 1 item, $7.50 for 2 items)
@@ -369,7 +408,7 @@ const shippingAmount = shippingCost.base_price + (Math.max(0, totalItems - 1) * 
 
 ## Commit Information
 - **Branch**: clean-branch
-- **Files Changed**: 7 files (4 new fixes + previous fixes)
-- **Lines Modified**: ~50 lines total
+- **Files Changed**: 8 files (5 new fixes + previous fixes)
+- **Lines Modified**: ~55 lines total
 - **Type**: UI/UX improvements + Bug fixes
-- **Impact**: Cleaner payment UI, proper text display, fixes display issues, no functional changes
+- **Impact**: Cleaner payment UI, proper text display, eliminates duplicate elements, fixes display issues, no functional changes
