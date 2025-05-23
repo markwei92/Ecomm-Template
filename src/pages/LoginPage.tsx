@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Loader } from 'lucide-react';
-import { toast } from 'react-toastify';
+import toast from '../utils/toastInterceptor';
 import { supabase } from '../lib/supabase';
 import { testAuth } from '../utils/testAuth';
 import { loginUser } from '../services/authService';

@@ -10,7 +10,7 @@ import {
   useElements,
 } from '@stripe/react-stripe-js';
 import { Loader } from 'lucide-react';
-import { toast } from 'react-toastify';
+import toast from '../utils/toastInterceptor';
 import { useSupabase } from '../context/SupabaseContext';
 import { useAuth } from '../context/AuthContext';
 
