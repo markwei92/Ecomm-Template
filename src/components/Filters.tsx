@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { FilterState, Theme, AgeGroup, ProductCategory } from '../types';
 import { X, ChevronDown, ChevronUp, Loader } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -52,45 +52,69 @@ export const Filters: React.FC<FiltersProps> = ({ filters, onFilterChange }) => 
   const [isLoadingThemes, setIsLoadingThemes] = useState(true);
 
   // Fetch themes from database
-  useEffect(() => {
-    const fetchThemes = async () => {
-      try {
-        setIsLoadingThemes(true);
+  const fetchThemes = useCallback(async () => {
+    try {
+      setIsLoadingThemes(true);
 
-        // Fetch themes from the themes table
-        const { data, error } = await supabase
-          .from('themes')
-          .select('slug')
-          .order('name');
+      // Fetch themes from the themes table
+      const { data, error } = await supabase
+        .from('themes')
+        .select('slug')
+        .order('name');
 
-        if (error) throw error;
+      if (error) throw error;
 
-        // Extract theme slugs
-        const themesList = data.map(theme => theme.slug);
-        setThemes(themesList);
-      } catch (error) {
-        console.error('Error fetching themes:', error);
-        // Fallback to default themes if there's an error
-        setThemes([
-          'christmas',
-          'common-phrases',
-          'daily-life',
-          'graphic-only',
-          'hobby',
-          'memes',
-          'others',
-          'personality',
-          'politics',
-          'sports',
-          'yoda'
-        ]);
-      } finally {
-        setIsLoadingThemes(false);
-      }
-    };
-
-    fetchThemes();
+      // Extract theme slugs
+      const themesList = data.map(theme => theme.slug);
+      setThemes(themesList);
+      console.log('Filter themes updated:', themesList);
+    } catch (error) {
+      console.error('Error fetching themes:', error);
+      // Fallback to default themes if there's an error
+      setThemes([
+        'christmas',
+        'common-phrases',
+        'daily-life',
+        'graphic-only',
+        'hobby',
+        'memes',
+        'others',
+        'personality',
+        'politics',
+        'sports',
+        'yoda'
+      ]);
+    } finally {
+      setIsLoadingThemes(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchThemes();
+
+    // Set up real-time subscription for theme changes
+    const channel = supabase.channel('filters-themes');
+
+    const subscription = channel
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'themes'
+        },
+        (payload) => {
+          console.log('Theme change detected in filters:', payload);
+          // Refresh themes when a change is detected
+          fetchThemes();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [fetchThemes]);
 
   // Fetch categories from database
   useEffect(() => {

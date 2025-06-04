@@ -624,9 +624,11 @@ export const StoreFront: React.FC = () => {
                       />
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{slide.title}</div>
-                    <div className="text-sm text-gray-500">{slide.description}</div>
+                  <td className="px-6 py-4">
+                    <div className="max-w-xs">
+                      <div className="text-sm font-medium text-gray-900 truncate">{slide.title}</div>
+                      <div className="text-sm text-gray-500 break-words whitespace-normal">{slide.description}</div>
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{slide.button_text}</div>

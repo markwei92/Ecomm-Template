@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Trash2, Plus, Loader, Upload, Check, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { uploadProductImage } from '../../lib/supabase-storage';
-import { Size, Color, ProductCategory, ProductCategoryObject } from '../../types';
+import { Color, ProductCategory, ProductCategoryObject } from '../../types';
 import { toast } from 'react-toastify';
 
 interface ProductVariant {
-  size: Size;
   colors: Color[];
   ageGroup: string;
   priceAdjustment: number;
@@ -31,8 +30,7 @@ export const CreateProduct: React.FC = () => {
   const [variants, setVariants] = useState<ProductVariant[]>([{
     ageGroup: 'adults',
     colors: [],
-    priceAdjustment: 0,
-    size: 'M' as Size
+    priceAdjustment: 0
   }]);
   const [images, setImages] = useState<ProductImage[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<number, number>>({});
@@ -185,7 +183,7 @@ export const CreateProduct: React.FC = () => {
 
   const sizesByAgeGroup = {
     adults: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
-    kids: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
+    kids: ['XS (Kids)', 'S (Kids)', 'M (Kids)', 'L (Kids)', 'XL (Kids)', '2XL (Kids)'],
     toddlers: ['2T', '3T', '4T', '5T']
   };
 
@@ -383,12 +381,10 @@ export const CreateProduct: React.FC = () => {
         autoClose: false
       });
 
-      // Get sizes based on age group
-      const sizes = sizesByAgeGroup[ageGroup as keyof typeof sizesByAgeGroup];
-
-      // Create variants
-      const variantPromises = variants.flatMap(variant =>
-        variant.colors.flatMap(color =>
+      // Create variants based on each variant's age group, generating all sizes for that age group
+      const variantPromises = variants.flatMap(variant => {
+        const sizes = sizesByAgeGroup[variant.ageGroup as keyof typeof sizesByAgeGroup];
+        return variant.colors.flatMap(color =>
           sizes.map(size => ({
             product_id: product.id,
             size,
@@ -396,8 +392,8 @@ export const CreateProduct: React.FC = () => {
             stock_quantity: 0,
             price_adjustment: variant.priceAdjustment
           }))
-        )
-      );
+        );
+      });
 
       console.log('Creating variants:', variantPromises.length);
 
@@ -459,8 +455,7 @@ export const CreateProduct: React.FC = () => {
     setVariants(prev => [...prev, {
       ageGroup: 'adults',
       colors: [],
-      priceAdjustment: 0,
-      size: 'M' as Size
+      priceAdjustment: 0
     }]);
   };
 
@@ -708,6 +703,12 @@ export const CreateProduct: React.FC = () => {
                       <option value="kids">Kids</option>
                       <option value="toddlers">Toddlers</option>
                     </select>
+                  </div>
+                  <div className="relative">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Sizes</label>
+                    <div className="text-sm text-gray-600 py-2 px-3 bg-gray-50 border border-gray-300 rounded-md">
+                      All {variant.ageGroup} sizes will be created
+                    </div>
                   </div>
                   <div className="relative">
                     <label className="block text-xs font-medium text-gray-500 mb-1">Colors</label>

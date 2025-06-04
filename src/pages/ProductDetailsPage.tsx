@@ -43,6 +43,7 @@ export const ProductDetailsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState<string>('');
   const [selectedColor, setSelectedColor] = useState<string>('');
+  const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
   const [personalizationText, setPersonalizationText] = useState('');
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -96,8 +97,18 @@ export const ProductDetailsPage: React.FC = () => {
 
         // Set initial selections
         if (data.product_variants.length > 0) {
-          setSelectedSize(data.product_variants[0].size);
-          setSelectedColor(data.product_variants[0].color);
+          // Determine age group from the first variant's size
+          const firstVariant = data.product_variants[0];
+          let ageGroup = 'adults';
+          if (['2T', '3T', '4T', '5T'].includes(firstVariant.size)) {
+            ageGroup = 'toddlers';
+          } else if (firstVariant.size.includes('(Kids)')) {
+            ageGroup = 'kids';
+          }
+
+          setSelectedAgeGroup(ageGroup);
+          setSelectedSize(firstVariant.size);
+          setSelectedColor(firstVariant.color);
         }
       } catch (err: any) {
         setError(err.message);
@@ -458,6 +469,74 @@ export const ProductDetailsPage: React.FC = () => {
     );
   };
 
+  // Helper function to determine age group from size
+  const getAgeGroupFromSize = (size: string) => {
+    if (['2T', '3T', '4T', '5T'].includes(size)) {
+      return 'toddlers';
+    } else if (size.includes('(Kids)')) {
+      return 'kids';
+    }
+    return 'adults';
+  };
+
+  // Get available age groups from variants
+  const getAvailableAgeGroups = () => {
+    if (!product) return [];
+
+    const ageGroups = new Set<string>();
+    product.product_variants.forEach(variant => {
+      ageGroups.add(getAgeGroupFromSize(variant.size));
+    });
+
+    return Array.from(ageGroups).sort();
+  };
+
+  // Get available sizes for the selected age group
+  const getAvailableSizes = () => {
+    if (!product || !selectedAgeGroup) return [];
+
+    return Array.from(new Set(
+      product.product_variants
+        .filter(v => getAgeGroupFromSize(v.size) === selectedAgeGroup)
+        .map(v => v.size)
+    ));
+  };
+
+  // Get available colors for the selected age group
+  const getAvailableColors = () => {
+    if (!product || !selectedAgeGroup) return [];
+
+    return Array.from(new Set(
+      product.product_variants
+        .filter(v => getAgeGroupFromSize(v.size) === selectedAgeGroup)
+        .map(v => v.color)
+    ));
+  };
+
+  // Handle age group change
+  const handleAgeGroupChange = (ageGroup: string) => {
+    setSelectedAgeGroup(ageGroup);
+
+    // Reset size and color selections and pick the first available ones for this age group
+    const availableVariants = product?.product_variants
+      .filter(v => getAgeGroupFromSize(v.size) === ageGroup);
+
+    if (availableVariants && availableVariants.length > 0) {
+      setSelectedSize(availableVariants[0].size);
+      setSelectedColor(availableVariants[0].color);
+    }
+  };
+
+  // Format size name for display (remove "(Kids)" suffix)
+  const formatSizeName = (size: string) => {
+    return size.replace(' (Kids)', '');
+  };
+
+  // Format age group name for display
+  const formatAgeGroupName = (ageGroup: string) => {
+    return ageGroup.charAt(0).toUpperCase() + ageGroup.slice(1);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen pt-16 flex items-center justify-center">
@@ -563,11 +642,31 @@ export const ProductDetailsPage: React.FC = () => {
                 <p className="mt-2 text-gray-600">{product.description}</p>
               </div>
 
+              {/* Age Group Selection */}
+              {getAvailableAgeGroups().length > 1 && (
+                <div>
+                  <h2 className="text-sm font-medium text-gray-900">Age Group</h2>
+                  <div className="mt-2">
+                    <select
+                      value={selectedAgeGroup}
+                      onChange={(e) => handleAgeGroupChange(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
+                    >
+                      {getAvailableAgeGroups().map((ageGroup) => (
+                        <option key={ageGroup} value={ageGroup}>
+                          {formatAgeGroupName(ageGroup)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
               {/* Size Selection */}
               <div>
                 <h2 className="text-sm font-medium text-gray-900">Size</h2>
                 <div className="mt-2 grid grid-cols-4 gap-2">
-                  {Array.from(new Set(product.product_variants.map(v => v.size))).map((size) => (
+                  {getAvailableSizes().map((size) => (
                     <button
                       key={size}
                       onClick={() => setSelectedSize(size)}
@@ -579,7 +678,7 @@ export const ProductDetailsPage: React.FC = () => {
                         }
                       `}
                     >
-                      {size}
+                      {formatSizeName(size)}
                     </button>
                   ))}
                 </div>
@@ -589,7 +688,7 @@ export const ProductDetailsPage: React.FC = () => {
               <div>
                 <h2 className="text-sm font-medium text-gray-900">Color</h2>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {Array.from(new Set(product.product_variants.map(v => v.color))).map((color) => (
+                  {getAvailableColors().map((color) => (
                     <button
                       key={color}
                       onClick={() => handleColorChange(color)}

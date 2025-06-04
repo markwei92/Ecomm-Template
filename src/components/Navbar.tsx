@@ -121,49 +121,73 @@ export const Navbar: React.FC = () => {
   const [isLoadingThemes, setIsLoadingThemes] = useState(true);
 
   // Fetch themes from database
-  useEffect(() => {
-    const fetchThemes = async () => {
-      try {
-        setIsLoadingThemes(true);
+  const fetchThemes = useCallback(async () => {
+    try {
+      setIsLoadingThemes(true);
 
-        // Fetch themes from the themes table
-        const { data, error } = await supabase
-          .from('themes')
-          .select('name, slug')
-          .order('name');
+      // Fetch themes from the themes table
+      const { data, error } = await supabase
+        .from('themes')
+        .select('name, slug')
+        .order('name');
 
-        if (error) throw error;
+      if (error) throw error;
 
-        // Transform to theme categories and include all age groups
-        const categories = data.map(theme => ({
-          name: theme.name,
-          href: `/products?theme=${theme.slug}`
-        }));
+      // Transform to theme categories and include all age groups
+      const categories = data.map(theme => ({
+        name: theme.name,
+        href: `/products?theme=${theme.slug}`
+      }));
 
-        setThemeCategories(categories);
-      } catch (error) {
-        console.error('Error fetching themes for navbar:', error);
-        // Fallback to default themes if there's an error (without age group parameter)
-        setThemeCategories([
-          { name: 'Christmas', href: '/products?theme=christmas' },
-          { name: 'Common Phrases', href: '/products?theme=common-phrases' },
-          { name: 'Daily Life Struggles', href: '/products?theme=daily-life' },
-          { name: 'Graphic Only', href: '/products?theme=graphic-only' },
-          { name: 'Hobby', href: '/products?theme=hobby' },
-          { name: 'Memes', href: '/products?theme=memes' },
-          { name: 'Others', href: '/products?theme=others' },
-          { name: 'Personality Trait', href: '/products?theme=personality' },
-          { name: 'Politics', href: '/products?theme=politics' },
-          { name: 'Sports', href: '/products?theme=sports' },
-          { name: 'Yoda-Like Quotes', href: '/products?theme=yoda' }
-        ]);
-      } finally {
-        setIsLoadingThemes(false);
-      }
-    };
-
-    fetchThemes();
+      setThemeCategories(categories);
+      console.log('Navbar themes updated:', categories);
+    } catch (error) {
+      console.error('Error fetching themes for navbar:', error);
+      // Fallback to default themes if there's an error (without age group parameter)
+      setThemeCategories([
+        { name: 'Christmas', href: '/products?theme=christmas' },
+        { name: 'Common Phrases', href: '/products?theme=common-phrases' },
+        { name: 'Daily Life Struggles', href: '/products?theme=daily-life' },
+        { name: 'Graphic Only', href: '/products?theme=graphic-only' },
+        { name: 'Hobby', href: '/products?theme=hobby' },
+        { name: 'Memes', href: '/products?theme=memes' },
+        { name: 'Others', href: '/products?theme=others' },
+        { name: 'Personality Trait', href: '/products?theme=personality' },
+        { name: 'Politics', href: '/products?theme=politics' },
+        { name: 'Sports', href: '/products?theme=sports' },
+        { name: 'Yoda-Like Quotes', href: '/products?theme=yoda' }
+      ]);
+    } finally {
+      setIsLoadingThemes(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchThemes();
+
+    // Set up real-time subscription for theme changes
+    const channel = supabase.channel('navbar-themes');
+
+    const subscription = channel
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'themes'
+        },
+        (payload) => {
+          console.log('Theme change detected in navbar:', payload);
+          // Refresh themes when a change is detected
+          fetchThemes();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [fetchThemes]);
 
   const collectionCategories = [
     { name: "All Collections", href: '/products' },

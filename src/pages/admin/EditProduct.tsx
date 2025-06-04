@@ -3,10 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Trash2, Plus, Loader, Upload, Check, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { uploadProductImage } from '../../lib/supabase-storage';
-import { Size, Color, ProductCategory, ProductCategoryObject } from '../../types';
+import { Color, ProductCategory, ProductCategoryObject } from '../../types';
 
 interface ProductVariant {
-  size: Size;
+  size: string;
   colors: Color[];
   ageGroup: string;
   priceAdjustment: number;
@@ -29,11 +29,7 @@ export const EditProduct: React.FC = () => {
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [canPersonalize, setCanPersonalize] = useState(false);
-  const [variants, setVariants] = useState<ProductVariant[]>([{
-    ageGroup: 'adults',
-    colors: [],
-    priceAdjustment: 0
-  }]);
+  const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [images, setImages] = useState<ProductImage[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<number, number>>({});
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
@@ -85,7 +81,8 @@ export const EditProduct: React.FC = () => {
 
   const handleAddVariant = () => {
     setVariants(prev => [...prev, {
-      ageGroup: 'adults',
+      size: 'M', // Default size
+      ageGroup: 'adults', // Default age group
       colors: [],
       priceAdjustment: 0
     }]);
@@ -231,7 +228,7 @@ export const EditProduct: React.FC = () => {
 
   const sizesByAgeGroup = {
     adults: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
-    kids: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
+    kids: ['XS (Kids)', 'S (Kids)', 'M (Kids)', 'L (Kids)', 'XL (Kids)', '2XL (Kids)'],
     toddlers: ['2T', '3T', '4T', '5T']
   };
 
@@ -332,12 +329,37 @@ export const EditProduct: React.FC = () => {
         isPrimary: img.is_primary,
       })));
 
-      setVariants(product.product_variants.map((variant: any) => ({
-        ageGroup: product.age_group,
-        size: variant.size,
-        colors: [variant.color],
-        priceAdjustment: variant.price_adjustment || 0
-      })));
+      // Group variants by size and price adjustment, collecting all colors for each size
+      const variantGroups = new Map();
+
+      product.product_variants.forEach((variant: any) => {
+        // Determine age group from size
+        let ageGroup = 'adults'; // default
+        if (['2T', '3T', '4T', '5T'].includes(variant.size)) {
+          ageGroup = 'toddlers';
+        } else if (variant.size.includes('(Kids)')) {
+          ageGroup = 'kids';
+        }
+
+        const key = `${variant.size}-${variant.price_adjustment || 0}`;
+
+        if (!variantGroups.has(key)) {
+          variantGroups.set(key, {
+            size: variant.size,
+            ageGroup,
+            colors: [],
+            priceAdjustment: variant.price_adjustment || 0
+          });
+        }
+
+        // Add color if not already present
+        const group = variantGroups.get(key);
+        if (!group.colors.includes(variant.color)) {
+          group.colors.push(variant.color);
+        }
+      });
+
+      setVariants(Array.from(variantGroups.values()));
 
     } catch (error) {
       console.error('Error fetching product:', error);
@@ -353,6 +375,26 @@ export const EditProduct: React.FC = () => {
     setError('');
 
     try {
+      // Validate that at least one color is selected for each variant
+      const hasEmptyColorVariants = variants.some(variant => variant.colors.length === 0);
+      if (hasEmptyColorVariants) {
+        setError('Please select at least one color for each variant');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Validate that no duplicate sizes with same price adjustment exist
+      const sizeKeys = new Set();
+      for (const variant of variants) {
+        const key = `${variant.size}-${variant.priceAdjustment}`;
+        if (sizeKeys.has(key)) {
+          setError(`Duplicate size found: ${variant.size} with same price adjustment. Please remove duplicates.`);
+          setIsSubmitting(false);
+          return;
+        }
+        sizeKeys.add(key);
+      }
+
       // Update product details
       // First, check if can_personalize column exists
       try {
@@ -364,12 +406,24 @@ export const EditProduct: React.FC = () => {
         console.log('Could not add column via RPC, continuing with update');
       }
 
+      // Determine the primary age group for the product
+      // If all variants have the same age group, use that
+      // Otherwise, use the most common age group or default to 'adults'
+      const ageGroups = variants.map(v => v.ageGroup);
+      const ageGroupCounts = ageGroups.reduce((acc, group) => {
+        acc[group] = (acc[group] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const primaryAgeGroup = Object.entries(ageGroupCounts)
+        .sort(([, a], [, b]) => b - a)[0]?.[0] || 'adults';
+
       const productData: any = {
         title,
         description,
         price: parseFloat(price),
         themes: selectedThemes,
-        age_group: variants[0]?.ageGroup || 'adults',
+        age_group: primaryAgeGroup,
         category: selectedCategory, // This is now the UUID
         updated_at: new Date().toISOString()
       };
@@ -389,7 +443,7 @@ export const EditProduct: React.FC = () => {
       // Handle image uploads
       const imagePromises = images
         .filter(img => img.file)
-        .map(async (img, index) => {
+        .map(async (img) => {
           if (!img.file) return;
           const url = await uploadProductImage(img.file, id!);
           return supabase
@@ -405,19 +459,16 @@ export const EditProduct: React.FC = () => {
       await Promise.all(imagePromises);
 
       // Update variants
-      // Get sizes based on age group
-      const ageGroup = variants[0]?.ageGroup || 'adults';
-      const sizes = sizesByAgeGroup[ageGroup as keyof typeof sizesByAgeGroup];
-
       // Delete existing variants
       await supabase
         .from('product_variants')
         .delete()
         .eq('product_id', id);
 
-      // Create new variants for each color and size combination
-      const variantPromises = variants.flatMap(variant =>
-        variant.colors.flatMap(color =>
+      // Create new variants based on age groups, generating all sizes for each age group
+      const variantPromises = variants.flatMap(variant => {
+        const sizes = sizesByAgeGroup[variant.ageGroup as keyof typeof sizesByAgeGroup];
+        return variant.colors.flatMap(color =>
           sizes.map(size => ({
             product_id: id,
             size,
@@ -425,8 +476,8 @@ export const EditProduct: React.FC = () => {
             stock_quantity: 0,
             price_adjustment: variant.priceAdjustment
           }))
-        )
-      );
+        );
+      });
 
       const { error: variantsError } = await supabase
         .from('product_variants')
@@ -641,12 +692,32 @@ export const EditProduct: React.FC = () => {
                       onChange={(e) => {
                         const newAgeGroup = e.target.value;
                         handleVariantChange(index, 'ageGroup', newAgeGroup);
+
+                        // Auto-update size to first available size for the new age group
+                        const newSizes = sizesByAgeGroup[newAgeGroup as keyof typeof sizesByAgeGroup];
+                        if (newSizes && newSizes.length > 0) {
+                          handleVariantChange(index, 'size', newSizes[0]);
+                        }
                       }}
                       className="block w-32 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-black focus:border-black sm:text-sm"
                     >
                       <option value="adults">Adults</option>
                       <option value="kids">Kids</option>
                       <option value="toddlers">Toddlers</option>
+                    </select>
+                  </div>
+                  <div className="relative">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Size</label>
+                    <select
+                      value={variant.size}
+                      onChange={(e) => handleVariantChange(index, 'size', e.target.value)}
+                      className="block w-28 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-black focus:border-black sm:text-sm"
+                    >
+                      {sizesByAgeGroup[variant.ageGroup as keyof typeof sizesByAgeGroup].map(size => (
+                        <option key={size} value={size}>
+                          {size.replace(' (Kids)', '')}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="relative">

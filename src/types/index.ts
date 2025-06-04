@@ -2,6 +2,11 @@ export type Size = 'XS' | 'S' | 'M' | 'L' | 'XL' | '2XL' | '3XL' |
   'XS (Kids)' | 'S (Kids)' | 'M (Kids)' | 'L (Kids)' | 'XL (Kids)' | '2XL (Kids)' |
   '2T' | '3T' | '4T' | '5T';
 
+export type Color = 'white' | 'black' | 'sport-grey' | 'ice-grey' | 'dark-heather-grey' |
+  'dark-chocolate' | 'maroon' | 'tropical-blue' | 'sand' | 'mint-green' |
+  'sage' | 'military-green' | 'forest-green' | 'light-blue' | 'navy' |
+  'light-pink' | 'antique-heliconia' | 'heather-orange' | 'coral-silk';
+
 export type AgeGroup = 'adults' | 'kids' | 'toddlers';
 
 export type Theme = 'casual' | 'graphic' | 'sports' | 'vintage' | 'limited';

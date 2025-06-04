@@ -34,15 +34,6 @@ export const ProductList: React.FC = () => {
     fetchProducts();
   }, [sortBy, sortOrder]);
 
-  // Add a separate effect to refresh products when the component mounts
-  useEffect(() => {
-    const refreshInterval = setInterval(() => {
-      fetchProducts();
-    }, 5000); // Refresh every 5 seconds
-
-    return () => clearInterval(refreshInterval);
-  }, []);
-
   const checkConnection = async () => {
     const isConnected = await testConnection();
     if (!isConnected) {
@@ -150,8 +141,42 @@ export const ProductList: React.FC = () => {
     return primaryImage?.url || 'https://via.placeholder.com/150';
   };
 
-  const getTotalStock = (product: Product) => {
-    return product.product_variants?.reduce((sum, variant) => sum + variant.stock_quantity, 0) || 0;
+  // Helper function to determine age group from size
+  const getAgeGroupFromSize = (size: string) => {
+    if (['2T', '3T', '4T', '5T'].includes(size)) {
+      return 'toddlers';
+    } else if (size.includes('(Kids)')) {
+      return 'kids';
+    }
+    return 'adults';
+  };
+
+  // Calculate logical variant count (grouped by age group, size, and price adjustment)
+  const getLogicalVariantCount = (product: any) => {
+    if (!product.product_variants || product.product_variants.length === 0) {
+      return 0;
+    }
+
+    const variantGroups = new Map();
+
+    product.product_variants.forEach((variant: any) => {
+      const ageGroup = getAgeGroupFromSize(variant.size);
+      const key = `${ageGroup}-${variant.size}-${variant.price_adjustment || 0}`;
+
+      if (!variantGroups.has(key)) {
+        variantGroups.set(key, {
+          ageGroup,
+          size: variant.size,
+          colors: new Set(),
+          priceAdjustment: variant.price_adjustment || 0
+        });
+      }
+
+      // Add color to the set
+      variantGroups.get(key).colors.add(variant.color);
+    });
+
+    return variantGroups.size;
   };
 
   return (
@@ -231,13 +256,10 @@ export const ProductList: React.FC = () => {
                     <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">
                       Product
                     </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                    <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
                       Price
                     </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Stock
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                    <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
                       Added
                     </th>
                     <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
@@ -248,13 +270,13 @@ export const ProductList: React.FC = () => {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={5} className="px-3 py-4 text-sm text-gray-500 text-center">
+                      <td colSpan={4} className="px-3 py-4 text-sm text-gray-500 text-center">
                         Loading products...
                       </td>
                     </tr>
                   ) : filteredProducts.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-3 py-4 text-sm text-gray-500 text-center">
+                      <td colSpan={4} className="px-3 py-4 text-sm text-gray-500 text-center">
                         No products found
                       </td>
                     </tr>
@@ -273,18 +295,15 @@ export const ProductList: React.FC = () => {
                             <div className="ml-4">
                               <div className="font-medium text-gray-900">{product.title}</div>
                               <div className="text-gray-500">
-                                {product.product_variants?.length || 0} variants
+                                {getLogicalVariantCount(product)} variants
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 text-right">
                           ${product.price.toFixed(2)}
                         </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                          {getTotalStock(product)}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 text-right">
                           {new Date(product.created_at).toLocaleDateString()}
                         </td>
                         <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
