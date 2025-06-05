@@ -390,7 +390,8 @@ export const CreateProduct: React.FC = () => {
             size,
             color,
             stock_quantity: 0,
-            price_adjustment: variant.priceAdjustment
+            price_adjustment: variant.priceAdjustment,
+            is_enabled: true // Default to enabled for new variants
           }))
         );
       });

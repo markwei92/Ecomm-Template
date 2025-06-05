@@ -10,6 +10,7 @@ interface ProductVariant {
   colors: Color[];
   ageGroup: string;
   priceAdjustment: number;
+  isEnabled: boolean;
 }
 
 interface ProductImage {
@@ -84,12 +85,9 @@ export const EditProduct: React.FC = () => {
       size: 'M', // Default size
       ageGroup: 'adults', // Default age group
       colors: [],
-      priceAdjustment: 0
+      priceAdjustment: 0,
+      isEnabled: true // Default to enabled
     }]);
-  };
-
-  const handleRemoveVariant = (index: number) => {
-    setVariants(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleVariantChange = (index: number, field: keyof ProductVariant, value: any) => {
@@ -292,7 +290,8 @@ export const EditProduct: React.FC = () => {
             size,
             color,
             stock_quantity,
-            price_adjustment
+            price_adjustment,
+            is_enabled
           )
         `)
         .eq('id', id)
@@ -348,7 +347,8 @@ export const EditProduct: React.FC = () => {
             size: variant.size,
             ageGroup,
             colors: [],
-            priceAdjustment: variant.price_adjustment || 0
+            priceAdjustment: variant.price_adjustment || 0,
+            isEnabled: variant.is_enabled !== false // Default to true if not set or null
           });
         }
 
@@ -465,18 +465,17 @@ export const EditProduct: React.FC = () => {
         .delete()
         .eq('product_id', id);
 
-      // Create new variants based on age groups, generating all sizes for each age group
+      // Create new variants based on the specific sizes shown in the admin interface
       const variantPromises = variants.flatMap(variant => {
-        const sizes = sizesByAgeGroup[variant.ageGroup as keyof typeof sizesByAgeGroup];
-        return variant.colors.flatMap(color =>
-          sizes.map(size => ({
-            product_id: id,
-            size,
-            color,
-            stock_quantity: 0,
-            price_adjustment: variant.priceAdjustment
-          }))
-        );
+        // Only create variants for the specific size shown, not all sizes in the age group
+        return variant.colors.map(color => ({
+          product_id: id,
+          size: variant.size, // Use the specific size from the variant
+          color,
+          stock_quantity: 0,
+          price_adjustment: variant.priceAdjustment,
+          is_enabled: variant.isEnabled
+        }));
       });
 
       const { error: variantsError } = await supabase
@@ -799,14 +798,26 @@ export const EditProduct: React.FC = () => {
                   >
                     <Plus className="w-4 h-4" />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveVariant(index)}
-                    className="p-2 text-red-500 hover:text-red-700"
-                    title="Remove variant"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="relative">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => handleVariantChange(index, 'isEnabled', !variant.isEnabled)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 ${variant.isEnabled ? 'bg-black' : 'bg-gray-200'
+                          }`}
+                        title={variant.isEnabled ? 'Disable variant' : 'Enable variant'}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${variant.isEnabled ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                        />
+                      </button>
+                      <span className={`text-sm font-medium ${variant.isEnabled ? 'text-green-600' : 'text-gray-400'}`}>
+                        {variant.isEnabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               ))}
               <button

@@ -51,6 +51,7 @@ import UserManagementDebugPage from './pages/UserManagementDebugPage';
 import OrderDiagnosticPage from './pages/OrderDiagnosticPage';
 import ReviewDebugPage from './pages/ReviewDebugPage';
 import { DiscountDebugPage } from './pages/DiscountDebugPage';
+import { TestPage } from './pages/TestPage';
 
 // Component to conditionally render the footer
 const AppLayout = () => {
@@ -69,6 +70,7 @@ const AppLayout = () => {
         <div className="flex-grow">
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/test" element={<TestPage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/products/:id" element={<ProductDetailsPage />} />
             <Route path="/login" element={<LoginPage />} />

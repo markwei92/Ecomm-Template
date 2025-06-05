@@ -29,6 +29,7 @@ interface ProductDetails {
     color: string;
     price_adjustment: number;
     stock_quantity: number;
+    is_enabled: boolean;
   }>;
 }
 
@@ -58,14 +59,7 @@ export const ProductDetailsPage: React.FC = () => {
   const [canUserReview, setCanUserReview] = useState(false);
   const [userOrders, setUserOrders] = useState<any[]>([]);
 
-  // Test toast notifications on component mount
-  useEffect(() => {
-    // Show a test toast notification
-    console.log('Testing toast notification from ProductDetailsPage');
-    setTimeout(() => {
-      toast.info('Testing toast from ProductDetailsPage');
-    }, 2000);
-  }, []);
+
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -86,7 +80,8 @@ export const ProductDetailsPage: React.FC = () => {
               size,
               color,
               price_adjustment,
-              stock_quantity
+              stock_quantity,
+              is_enabled
             )
           `)
           .eq('id', id)
@@ -96,9 +91,10 @@ export const ProductDetailsPage: React.FC = () => {
         setProduct(data);
 
         // Set initial selections
-        if (data.product_variants.length > 0) {
-          // Determine age group from the first variant's size
-          const firstVariant = data.product_variants[0];
+        const enabledVariants = data.product_variants.filter(v => v.is_enabled !== false);
+        if (enabledVariants.length > 0) {
+          // Determine age group from the first enabled variant's size
+          const firstVariant = enabledVariants[0];
           let ageGroup = 'adults';
           if (['2T', '3T', '4T', '5T'].includes(firstVariant.size)) {
             ageGroup = 'toddlers';
@@ -121,7 +117,8 @@ export const ProductDetailsPage: React.FC = () => {
   }, [id]);
 
   // Fetch reviews for the product
-  // Check if the user can review this product
+  // Temporarily disable user review checking to isolate loading issues
+  /*
   useEffect(() => {
     const checkUserCanReview = async () => {
       if (!id) return;
@@ -179,7 +176,18 @@ export const ProductDetailsPage: React.FC = () => {
 
     checkUserCanReview();
   }, [id]);
+  */
 
+  // Temporarily disable review fetching to isolate loading issues
+  useEffect(() => {
+    // Set default empty review state
+    setReviews([]);
+    setAverageRating(null);
+    setReviewCount(0);
+    setReviewsLoading(false);
+  }, [id]);
+
+  /*
   useEffect(() => {
     const fetchReviews = async () => {
       if (!id) return;
@@ -189,203 +197,85 @@ export const ProductDetailsPage: React.FC = () => {
       try {
         console.log('Fetching reviews for product:', id);
 
-        // First, check if the product exists
-        const { data: productData, error: productError } = await supabase
-          .from('products')
-          .select('id, title')
-          .eq('id', id)
-          .single();
+        // Simple direct query for reviews
+        const { data: directReviews, error: directError } = await supabase
+          .from('product_reviews')
+          .select('*')
+          .eq('product_id', id)
+          .eq('is_published', true)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false });
 
-        if (productError) {
-          console.error('Error checking product existence:', productError);
-          // Continue anyway, we'll try to fetch reviews
-        } else {
-          console.log('Product found:', productData);
-        }
+        if (directError) {
+          console.error('Error querying reviews:', directError);
+          setReviews([]);
+          setAverageRating(null);
+          setReviewCount(0);
+        } else if (directReviews && directReviews.length > 0) {
+          console.log(`Found ${directReviews.length} reviews`);
 
-        // Fetch reviews using the improved service
-        try {
-          console.log('Fetching reviews using improved service method');
-          const reviewsData = await getProductReviews(id);
-          console.log('Reviews data from service:', reviewsData);
-
-          if (reviewsData && reviewsData.length > 0) {
-            console.log(`Setting ${reviewsData.length} reviews from service data`);
-            setReviews(reviewsData);
-
-            // Calculate average rating manually
-            const sum = reviewsData.reduce((acc, review) => acc + review.rating, 0);
-            const average = sum / reviewsData.length;
-            console.log(`Calculated average rating: ${average} from ${reviewsData.length} reviews`);
-            setAverageRating(average);
-            setReviewCount(reviewsData.length);
-          } else {
-            console.log('No reviews returned from service');
-
-            // Try a direct query as a fallback
-            console.log('Trying direct query as fallback');
-            const { data: directReviews, error: directError } = await supabase
-              .from('product_reviews')
-              .select('*')
-              .eq('product_id', id)
-              .eq('is_published', true)
-              .is('deleted_at', null)
-              .order('created_at', { ascending: false });
-
-            if (directError) {
-              console.error('Error directly querying reviews:', directError);
-            } else if (directReviews && directReviews.length > 0) {
-              console.log(`Found ${directReviews.length} reviews with direct query`);
-
-              // Process the direct reviews
-              const processedReviews = await processDirectReviews(directReviews, id);
-              console.log('Processed direct reviews:', processedReviews);
-
-              setReviews(processedReviews);
-
-              // Calculate average rating manually
-              const sum = directReviews.reduce((acc, review) => acc + review.rating, 0);
-              const average = sum / directReviews.length;
-              console.log(`Calculated average rating: ${average} from direct reviews`);
-              setAverageRating(average);
-              setReviewCount(directReviews.length);
-            } else {
-              console.log('No reviews found with direct query either');
-              // Fetch review count and average rating separately
-              await fetchReviewStats(id);
+          // Simple processing without complex profile fetching
+          const processedReviews = directReviews.map(review => ({
+            ...review,
+            user: {
+              first_name: 'Anonymous',
+              last_name: 'User',
+              email: ''
             }
-          }
-        } catch (reviewError) {
-          console.error('Error fetching reviews from service:', reviewError);
-          // Try to fetch review stats separately
-          await fetchReviewStats(id);
+          }));
+
+          setReviews(processedReviews);
+
+          // Calculate average rating
+          const sum = directReviews.reduce((acc, review) => acc + review.rating, 0);
+          const average = sum / directReviews.length;
+          setAverageRating(average);
+          setReviewCount(directReviews.length);
+        } else {
+          console.log('No reviews found');
+          setReviews([]);
+          setAverageRating(null);
+          setReviewCount(0);
         }
       } catch (err) {
-        console.error('Error in main fetchReviews function:', err);
+        console.error('Error fetching reviews:', err);
+        setReviews([]);
+        setAverageRating(null);
+        setReviewCount(0);
       } finally {
         setReviewsLoading(false);
       }
     };
 
-    // Helper function to process direct reviews
-    const processDirectReviews = async (directReviews: any[], productId: string) => {
-      try {
-        // Get unique user IDs
-        const userIds = [...new Set(directReviews.map(review => review.user_id))];
-
-        // Fetch profiles for these users
-        const { data: profiles, error: profilesError } = await supabase
-          .from('profiles')
-          .select('id, first_name, last_name, email')
-          .in('id', userIds);
-
-        if (profilesError) {
-          console.error('Error fetching user profiles:', profilesError);
-        } else if (profiles) {
-          console.log(`Found ${profiles.length} user profiles`);
-
-          // Create a map of user_id to profile
-          const profileMap = profiles.reduce<Record<string, any>>((map, profile) => {
-            map[profile.id] = profile;
-            return map;
-          }, {});
-
-          // Attach profiles to reviews
-          return directReviews.map(review => {
-            try {
-              const profile = profileMap[review.user_id];
-
-              // Create a processed review object
-              const processedReview = {
-                ...review,
-                product_id: productId,
-                order_id: review.order_id || '',
-                is_published: true,
-                updated_at: review.updated_at || review.created_at,
-                deleted_at: null,
-                viewed: false,
-                user: {
-                  first_name: '',
-                  last_name: '',
-                  email: ''
-                }
-              };
-
-              // Add profile data if available
-              if (profile) {
-                processedReview.profiles = profile;
-                processedReview.user = {
-                  first_name: profile.first_name || '',
-                  last_name: profile.last_name || '',
-                  email: profile.email || ''
-                };
-              }
-
-              return processedReview;
-            } catch (err) {
-              console.error('Error processing review:', err);
-              return review;
-            }
-          });
-        }
-
-        // If we couldn't fetch profiles, return the reviews as is
-        return directReviews;
-      } catch (err) {
-        console.error('Error in processDirectReviews:', err);
-        return directReviews;
-      }
-    };
-
-    // Helper function to fetch review stats separately
-    const fetchReviewStats = async (productId: string) => {
-      try {
-        // Fetch average rating
-        const avgRating = await getProductAverageRating(productId);
-        console.log('Average rating from service:', avgRating);
-
-        if (avgRating !== null) {
-          setAverageRating(avgRating);
-        }
-
-        // Fetch review count
-        const count = await getProductReviewCount(productId);
-        console.log('Review count from service:', count);
-
-        if (count !== null) {
-          setReviewCount(count);
-        }
-      } catch (err) {
-        console.error('Error fetching review stats:', err);
-      }
-    };
-
     fetchReviews();
+  */
 
-    // Set up real-time subscription for review updates
-    const channel = supabase.channel('product-reviews-' + id);
+  // Temporarily disable real-time subscription to prevent infinite loops
+  // TODO: Re-enable with proper debouncing once the loading issue is resolved
+  /*
+  const channel = supabase.channel('product-reviews-' + id);
 
-    const subscription = channel
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'product_reviews',
-          filter: `product_id=eq.${id}`
-        },
-        (payload) => {
-          console.log('Review update received:', payload);
-          // Refresh reviews when a change is detected
-          fetchReviews();
-        }
-      )
-      .subscribe();
+  const subscription = channel
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'product_reviews',
+        filter: `product_id=eq.${id}`
+      },
+      (payload) => {
+        console.log('Review update received:', payload);
+        // Refresh reviews when a change is detected
+        fetchReviews();
+      }
+    )
+    .subscribe();
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [id]);
+  return () => {
+    subscription.unsubscribe();
+  };
+  */
 
   const addProductToCart = async (redirectToCheckout = false) => {
     if (!product || !currentVariant) return false;
@@ -464,7 +354,7 @@ export const ProductDetailsPage: React.FC = () => {
   };
 
   const getCurrentVariant = () => {
-    return product?.product_variants.find(
+    return getEnabledVariants().find(
       v => v.size === selectedSize && v.color === selectedColor
     );
   };
@@ -479,27 +369,67 @@ export const ProductDetailsPage: React.FC = () => {
     return 'adults';
   };
 
+  // Helper function to get only enabled variants
+  const getEnabledVariants = () => {
+    return product?.product_variants.filter(v => v.is_enabled !== false) || [];
+  };
+
   // Get available age groups from variants
   const getAvailableAgeGroups = () => {
     if (!product) return [];
 
     const ageGroups = new Set<string>();
-    product.product_variants.forEach(variant => {
+    getEnabledVariants().forEach(variant => {
       ageGroups.add(getAgeGroupFromSize(variant.size));
     });
 
     return Array.from(ageGroups).sort();
   };
 
-  // Get available sizes for the selected age group
+  // Get all sizes for the selected age group (including disabled ones) in proper order
+  const getAllSizes = () => {
+    if (!product || !selectedAgeGroup) return [];
+
+    // Define the proper size order for each age group
+    const sizeOrder = {
+      adults: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
+      kids: ['XS (Kids)', 'S (Kids)', 'M (Kids)', 'L (Kids)', 'XL (Kids)', '2XL (Kids)'],
+      toddlers: ['2T', '3T', '4T', '5T']
+    };
+
+    // Get all sizes that exist in variants for this age group
+    const existingSizes = new Set(
+      product.product_variants
+        .filter(v => getAgeGroupFromSize(v.size) === selectedAgeGroup)
+        .map(v => v.size)
+    );
+
+    // Return sizes in the proper order, only including those that exist in variants
+    return sizeOrder[selectedAgeGroup as keyof typeof sizeOrder]?.filter(size =>
+      existingSizes.has(size)
+    ) || [];
+  };
+
+  // Get available sizes for the selected age group (only enabled ones)
   const getAvailableSizes = () => {
     if (!product || !selectedAgeGroup) return [];
 
     return Array.from(new Set(
-      product.product_variants
+      getEnabledVariants()
         .filter(v => getAgeGroupFromSize(v.size) === selectedAgeGroup)
         .map(v => v.size)
     ));
+  };
+
+  // Check if a specific size is enabled
+  const isSizeEnabled = (size: string) => {
+    if (!product) return false;
+
+    return product.product_variants.some(v =>
+      v.size === size &&
+      getAgeGroupFromSize(v.size) === selectedAgeGroup &&
+      v.is_enabled !== false
+    );
   };
 
   // Get available colors for the selected age group
@@ -507,7 +437,7 @@ export const ProductDetailsPage: React.FC = () => {
     if (!product || !selectedAgeGroup) return [];
 
     return Array.from(new Set(
-      product.product_variants
+      getEnabledVariants()
         .filter(v => getAgeGroupFromSize(v.size) === selectedAgeGroup)
         .map(v => v.color)
     ));
@@ -518,12 +448,16 @@ export const ProductDetailsPage: React.FC = () => {
     setSelectedAgeGroup(ageGroup);
 
     // Reset size and color selections and pick the first available ones for this age group
-    const availableVariants = product?.product_variants
+    const availableVariants = getEnabledVariants()
       .filter(v => getAgeGroupFromSize(v.size) === ageGroup);
 
     if (availableVariants && availableVariants.length > 0) {
       setSelectedSize(availableVariants[0].size);
       setSelectedColor(availableVariants[0].color);
+    } else {
+      // If no enabled variants, clear selections
+      setSelectedSize('');
+      setSelectedColor('');
     }
   };
 
@@ -666,21 +600,30 @@ export const ProductDetailsPage: React.FC = () => {
               <div>
                 <h2 className="text-sm font-medium text-gray-900">Size</h2>
                 <div className="mt-2 grid grid-cols-4 gap-2">
-                  {getAvailableSizes().map((size) => (
-                    <button
-                      key={size}
-                      onClick={() => setSelectedSize(size)}
-                      className={`
-                        py-2 px-4 text-sm font-medium rounded-md
-                        ${selectedSize === size
-                          ? 'bg-black text-white'
-                          : 'bg-white text-gray-900 border border-gray-300 hover:bg-gray-50'
-                        }
-                      `}
-                    >
-                      {formatSizeName(size)}
-                    </button>
-                  ))}
+                  {getAllSizes().map((size) => {
+                    const isEnabled = isSizeEnabled(size);
+                    const isSelected = selectedSize === size;
+
+                    return (
+                      <button
+                        key={size}
+                        onClick={() => isEnabled && setSelectedSize(size)}
+                        disabled={!isEnabled}
+                        className={`
+                          py-2 px-4 text-sm font-medium rounded-md transition-all duration-200
+                          ${isSelected && isEnabled
+                            ? 'bg-black text-white'
+                            : isEnabled
+                              ? 'bg-white text-gray-900 border border-gray-300 hover:bg-gray-50'
+                              : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-50'
+                          }
+                        `}
+                        title={!isEnabled ? 'This size is currently unavailable' : ''}
+                      >
+                        {formatSizeName(size)}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -752,14 +695,22 @@ export const ProductDetailsPage: React.FC = () => {
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={handleAddToCart}
-                    className="flex items-center justify-center space-x-2 bg-white border border-black text-black py-3 px-4 rounded-md hover:bg-gray-100 transition-colors duration-200"
+                    disabled={!currentVariant}
+                    className={`flex items-center justify-center space-x-2 py-3 px-4 rounded-md transition-colors duration-200 ${currentVariant
+                      ? 'bg-white border border-black text-black hover:bg-gray-100'
+                      : 'bg-gray-100 border border-gray-300 text-gray-400 cursor-not-allowed'
+                      }`}
                   >
                     <ShoppingCart className="h-5 w-5" />
                     <span>Add to Cart</span>
                   </button>
                   <button
                     onClick={handleBuyNow}
-                    className="flex items-center justify-center space-x-2 bg-black text-white py-3 px-4 rounded-md hover:bg-gray-900 transition-colors duration-200"
+                    disabled={!currentVariant}
+                    className={`flex items-center justify-center space-x-2 py-3 px-4 rounded-md transition-colors duration-200 ${currentVariant
+                      ? 'bg-black text-white hover:bg-gray-900'
+                      : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                      }`}
                   >
                     <CreditCard className="h-5 w-5" />
                     <span>Buy Now</span>
