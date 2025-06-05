@@ -4,6 +4,7 @@ import { Trash2, Plus, Loader, Upload, Check, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { uploadProductImage } from '../../lib/supabase-storage';
 import { Color, ProductCategory, ProductCategoryObject } from '../../types';
+import { colorMap, formatColorName } from '../../utils/colorMap';
 
 interface ProductVariant {
   size: string;
@@ -230,37 +231,8 @@ export const EditProduct: React.FC = () => {
     toddlers: ['2T', '3T', '4T', '5T']
   };
 
-  const colorMap: Record<Color, string> = {
-    'white': '#FFFFFF',
-    'black': '#000000',
-    'sport-grey': '#CACACA',
-    'ice-grey': '#D7D6D3',
-    'dark-heather-grey': '#3A3D42',
-    'dark-chocolate': '#31221D',
-    'maroon': '#642838',
-    'tropical-blue': '#0097A9',
-    'sand': '#DCD2BE',
-    'mint-green': '#B1E0C0',
-    'sage': '#A4B09E',
-    'military-green': '#62664C',
-    'forest-green': '#223B26',
-    'light-blue': '#D6E6F7',
-    'navy': '#1A2237',
-    'light-pink': '#FEE0EB',
-    'antique-heliconia': '#B92972',
-    'heather-orange': '#FF8B4A',
-    'coral-silk': '#E67376'
-  };
-
   const formatThemeName = (theme: string) => {
     return theme
-      .split('-')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  };
-
-  const formatColorName = (color: string) => {
-    return color
       .split('-')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');

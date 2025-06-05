@@ -52,6 +52,7 @@ import OrderDiagnosticPage from './pages/OrderDiagnosticPage';
 import ReviewDebugPage from './pages/ReviewDebugPage';
 import { DiscountDebugPage } from './pages/DiscountDebugPage';
 import { TestPage } from './pages/TestPage';
+import { ColorTestPage } from './pages/ColorTestPage';
 
 // Component to conditionally render the footer
 const AppLayout = () => {
@@ -71,6 +72,7 @@ const AppLayout = () => {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/test" element={<TestPage />} />
+            <Route path="/color-test" element={<ColorTestPage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/products/:id" element={<ProductDetailsPage />} />
             <Route path="/login" element={<LoginPage />} />

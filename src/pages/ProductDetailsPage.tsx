@@ -9,6 +9,8 @@ import { MiniCartNotification } from '../components/MiniCartNotification';
 import { ReviewModal } from '../components/ReviewModal';
 import { ProductReviews } from '../components/ProductReviews';
 import { getProductReviews, getProductAverageRating, getProductReviewCount, hasUserReviewedProduct, Review } from '../services/reviewService';
+import { Color } from '../types';
+import { getColorHex } from '../utils/colorMap';
 
 interface ProductDetails {
   id: string;
@@ -32,6 +34,8 @@ interface ProductDetails {
     is_enabled: boolean;
   }>;
 }
+
+
 
 export const ProductDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -639,7 +643,7 @@ export const ProductDetailsPage: React.FC = () => {
                         w-10 h-10 rounded-full border-2
                         ${selectedColor === color ? 'border-black' : 'border-gray-300'}
                       `}
-                      style={{ backgroundColor: color }}
+                      style={{ backgroundColor: getColorHex(color) }}
                     >
                       <span className="sr-only">{color}</span>
                     </button>
