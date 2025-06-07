@@ -31,11 +31,8 @@ export const ToastSettingsProvider: React.FC<ToastSettingsProviderProps> = ({ ch
   });
 
   useEffect(() => {
-    console.log('ToastSettingsProvider initialized');
-
     const fetchToastSettings = async () => {
       try {
-        console.log('Fetching toast settings from database');
         const { data, error } = await supabase
           .from('site_settings')
           .select('setting_value')
@@ -43,25 +40,19 @@ export const ToastSettingsProvider: React.FC<ToastSettingsProviderProps> = ({ ch
           .single();
 
         if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-          console.error('Error fetching toast settings:', error);
           return;
         }
 
         if (data) {
-          console.log('Toast settings from database:', data);
           const settings = data.setting_value as ToastSettings;
           setToastSettings(settings);
-          // Update the global toast interceptor
           setToastEnabled(settings.enabled);
-          console.log('Toast notifications enabled state set to:', settings.enabled);
         } else {
-          console.log('No toast settings found in database, using defaults');
           // Ensure toasts are enabled by default
           setToastSettings({ enabled: true });
           setToastEnabled(true);
         }
       } catch (error) {
-        console.error('Error fetching toast settings:', error);
         // Ensure toasts are enabled even if there's an error
         setToastSettings({ enabled: true });
         setToastEnabled(true);
@@ -69,12 +60,6 @@ export const ToastSettingsProvider: React.FC<ToastSettingsProviderProps> = ({ ch
     };
 
     fetchToastSettings();
-
-    // Test toast directly from context
-    setTimeout(() => {
-      console.log('Testing toast from ToastSettingsContext');
-      toast.info('Toast from context initialization');
-    }, 3000);
   }, []);
 
   const updateToastSettings = async (settings: ToastSettings) => {

@@ -14,9 +14,15 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ products, filters }) =
       return false;
     }
 
-    // Check age groups
-    if (filters.ageGroups.length > 0 && !filters.ageGroups.includes(product.ageGroup)) {
-      return false;
+    // Check age groups - use availableAgeGroups if available, otherwise fall back to ageGroup
+    if (filters.ageGroups.length > 0) {
+      const productAgeGroups = product.availableAgeGroups || [product.ageGroup];
+      const hasMatchingAgeGroup = filters.ageGroups.some(ageGroup =>
+        productAgeGroups.includes(ageGroup)
+      );
+      if (!hasMatchingAgeGroup) {
+        return false;
+      }
     }
 
     // Check colors

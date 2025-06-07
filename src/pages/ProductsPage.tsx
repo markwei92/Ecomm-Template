@@ -6,6 +6,26 @@ import { FilterState, Product, AgeGroup, ProductCategory } from '../types';
 import { PanelLeftClose, PanelLeftOpen, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
+// Helper function to determine age group from size
+const getAgeGroupFromSize = (size: string) => {
+  if (['2T', '3T', '4T', '5T'].includes(size)) {
+    return 'toddlers';
+  } else if (size.includes('(Kids)')) {
+    return 'kids';
+  } else {
+    return 'adults';
+  }
+};
+
+// Helper function to get available age groups from product variants
+const getAvailableAgeGroups = (variants: any[]) => {
+  const ageGroups = new Set<string>();
+  variants.forEach(variant => {
+    ageGroups.add(getAgeGroupFromSize(variant.size));
+  });
+  return Array.from(ageGroups);
+};
+
 export const ProductsPage: React.FC = () => {
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
@@ -101,8 +121,7 @@ export const ProductsPage: React.FC = () => {
         query = query.contains('themes', [filters.theme]);
       }
 
-      // Always filter by the selected age groups
-      query = query.in('age_group', filters.ageGroups);
+      // Note: Age group filtering will be done client-side based on variants
 
       // Filter by category if specific categories are selected (not 'all')
       if (filters.categories.length > 0 && !filters.categories.includes('all')) {
@@ -135,34 +154,49 @@ export const ProductsPage: React.FC = () => {
       if (error) throw error;
 
       // Transform the data to match our Product type
-      const transformedProducts: Product[] = data.map(product => {
-        // Special case for the mug product
-        let category = product.category;
-        if (product.id === '9b73fe3d-c0d4-4059-9cd9-cfa60a6da24c') {
-          console.log('Found mug product with category:', category);
-          // If this is the mug product, force its category to be 'mugs'
-          category = 'mugs';
-        }
+      const transformedProducts: Product[] = data
+        .map(product => {
+          // Special case for the mug product
+          let category = product.category;
+          if (product.id === '9b73fe3d-c0d4-4059-9cd9-cfa60a6da24c') {
+            console.log('Found mug product with category:', category);
+            // If this is the mug product, force its category to be 'mugs'
+            category = 'mugs';
+          }
 
-        return {
-          id: product.id,
-          title: product.title,
-          description: product.description || '',
-          price: product.price,
-          images: product.product_images.map((img: any) => ({
-            color: img.color,
-            url: img.url
-          })),
-          styles: [],
-          themes: product.themes || [],
-          colors: Array.from(new Set(product.product_variants.map((v: any) => v.color))),
-          ageGroup: product.age_group,
-          sizes: Array.from(new Set(product.product_variants.map((v: any) => v.size))),
-          createdAt: product.created_at,
-          canPersonalize: product.can_personalize,
-          category: category // Use the potentially modified category
-        };
-      });
+          // Get available age groups from variants
+          const availableAgeGroups = getAvailableAgeGroups(product.product_variants);
+
+          return {
+            id: product.id,
+            title: product.title,
+            description: product.description || '',
+            price: product.price,
+            images: product.product_images.map((img: any) => ({
+              color: img.color,
+              url: img.url
+            })),
+            styles: [],
+            themes: product.themes || [],
+            colors: Array.from(new Set(product.product_variants.map((v: any) => v.color))),
+            ageGroup: product.age_group, // Keep original for compatibility
+            availableAgeGroups, // Add available age groups from variants
+            sizes: Array.from(new Set(product.product_variants.map((v: any) => v.size))),
+            createdAt: product.created_at,
+            canPersonalize: product.can_personalize,
+            category: category // Use the potentially modified category
+          };
+        })
+        .filter(product => {
+          // Filter by age groups based on variants
+          if (filters.ageGroups.length > 0) {
+            const hasMatchingAgeGroup = filters.ageGroups.some(ageGroup =>
+              product.availableAgeGroups.includes(ageGroup)
+            );
+            return hasMatchingAgeGroup;
+          }
+          return true;
+        });
 
       console.log('Transformed products with categories:', transformedProducts.map(p => ({ id: p.id, title: p.title, category: p.category })));
 

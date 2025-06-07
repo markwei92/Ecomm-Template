@@ -70,6 +70,8 @@ export const ProductDetailsPage: React.FC = () => {
       try {
         if (!id) return;
 
+        console.log('Fetching product with ID:', id);
+
         const { data, error } = await supabase
           .from('products')
           .select(`
@@ -91,7 +93,12 @@ export const ProductDetailsPage: React.FC = () => {
           .eq('id', id)
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error('Error fetching product:', error);
+          throw error;
+        }
+
+        console.log('Product fetched successfully:', data);
         setProduct(data);
 
         // Set initial selections
@@ -111,6 +118,7 @@ export const ProductDetailsPage: React.FC = () => {
           setSelectedColor(firstVariant.color);
         }
       } catch (err: any) {
+        console.error('Error in fetchProduct:', err);
         setError(err.message);
       } finally {
         setIsLoading(false);
@@ -120,9 +128,7 @@ export const ProductDetailsPage: React.FC = () => {
     fetchProduct();
   }, [id]);
 
-  // Fetch reviews for the product
-  // Temporarily disable user review checking to isolate loading issues
-  /*
+  // Check if user can review this product
   useEffect(() => {
     const checkUserCanReview = async () => {
       if (!id) return;
@@ -132,7 +138,6 @@ export const ProductDetailsPage: React.FC = () => {
         const { data: { user } } = await supabase.auth.getUser();
 
         if (!user) {
-          console.log('User not logged in, cannot review');
           setCanUserReview(false);
           return;
         }
@@ -146,52 +151,36 @@ export const ProductDetailsPage: React.FC = () => {
           .order('created_at', { ascending: false });
 
         if (ordersError) {
-          console.error('Error fetching user orders:', ordersError);
           setCanUserReview(false);
           return;
         }
 
         if (!orders || orders.length === 0) {
-          console.log('User has not purchased this product');
           setCanUserReview(false);
           return;
         }
 
-        console.log('User has purchased this product in these orders:', orders);
         setUserOrders(orders);
 
         // Check if the user has already reviewed this product
         for (const order of orders) {
           const hasReviewed = await hasUserReviewedProduct(id, order.id);
           if (!hasReviewed) {
-            console.log('User can review this product from order:', order.id);
             setCanUserReview(true);
             return;
           }
         }
 
-        console.log('User has already reviewed this product from all eligible orders');
         setCanUserReview(false);
       } catch (err) {
-        console.error('Error checking if user can review:', err);
         setCanUserReview(false);
       }
     };
 
     checkUserCanReview();
   }, [id]);
-  */
 
-  // Temporarily disable review fetching to isolate loading issues
-  useEffect(() => {
-    // Set default empty review state
-    setReviews([]);
-    setAverageRating(null);
-    setReviewCount(0);
-    setReviewsLoading(false);
-  }, [id]);
-
-  /*
+  // Fetch reviews for the product
   useEffect(() => {
     const fetchReviews = async () => {
       if (!id) return;
@@ -199,50 +188,21 @@ export const ProductDetailsPage: React.FC = () => {
       setReviewsLoading(true);
 
       try {
-        console.log('Fetching reviews for product:', id);
+        // Use the review service to fetch reviews
+        const reviewsData = await getProductReviews(id);
 
-        // Simple direct query for reviews
-        const { data: directReviews, error: directError } = await supabase
-          .from('product_reviews')
-          .select('*')
-          .eq('product_id', id)
-          .eq('is_published', true)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false });
-
-        if (directError) {
-          console.error('Error querying reviews:', directError);
-          setReviews([]);
-          setAverageRating(null);
-          setReviewCount(0);
-        } else if (directReviews && directReviews.length > 0) {
-          console.log(`Found ${directReviews.length} reviews`);
-
-          // Simple processing without complex profile fetching
-          const processedReviews = directReviews.map(review => ({
-            ...review,
-            user: {
-              first_name: 'Anonymous',
-              last_name: 'User',
-              email: ''
-            }
-          }));
-
-          setReviews(processedReviews);
-
-          // Calculate average rating
-          const sum = directReviews.reduce((acc, review) => acc + review.rating, 0);
-          const average = sum / directReviews.length;
+        if (reviewsData && reviewsData.length > 0) {
+          setReviews(reviewsData);
+          const sum = reviewsData.reduce((acc, review) => acc + review.rating, 0);
+          const average = sum / reviewsData.length;
           setAverageRating(average);
-          setReviewCount(directReviews.length);
+          setReviewCount(reviewsData.length);
         } else {
-          console.log('No reviews found');
           setReviews([]);
           setAverageRating(null);
           setReviewCount(0);
         }
       } catch (err) {
-        console.error('Error fetching reviews:', err);
         setReviews([]);
         setAverageRating(null);
         setReviewCount(0);
@@ -252,34 +212,11 @@ export const ProductDetailsPage: React.FC = () => {
     };
 
     fetchReviews();
-  */
+  }, [id]);
 
-  // Temporarily disable real-time subscription to prevent infinite loops
-  // TODO: Re-enable with proper debouncing once the loading issue is resolved
-  /*
-  const channel = supabase.channel('product-reviews-' + id);
 
-  const subscription = channel
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'product_reviews',
-        filter: `product_id=eq.${id}`
-      },
-      (payload) => {
-        console.log('Review update received:', payload);
-        // Refresh reviews when a change is detected
-        fetchReviews();
-      }
-    )
-    .subscribe();
 
-  return () => {
-    subscription.unsubscribe();
-  };
-  */
+
 
   const addProductToCart = async (redirectToCheckout = false) => {
     if (!product || !currentVariant) return false;
@@ -724,11 +661,6 @@ export const ProductDetailsPage: React.FC = () => {
 
               {/* Additional Details */}
               <div className="border-t border-gray-200 pt-6 space-y-4">
-                <div>
-                  <h2 className="text-sm font-medium text-gray-900">Age Group</h2>
-                  <p className="mt-2 text-gray-600 capitalize">{product.age_group}</p>
-                </div>
-
                 {product.themes.length > 0 && (
                   <div>
                     <h2 className="text-sm font-medium text-gray-900">Themes</h2>

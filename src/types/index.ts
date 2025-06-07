@@ -26,6 +26,7 @@ export interface Product {
   themes: string[];
   colors: string[];
   ageGroup: AgeGroup;
+  availableAgeGroups?: AgeGroup[]; // Age groups available from variants
   sizes: Size[];
   createdAt: string;
   canPersonalize?: boolean;

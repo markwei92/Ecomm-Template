@@ -120,24 +120,18 @@ export const HomePage: React.FC = () => {
   const fetchCarouselItems = async (forceRefresh = false) => {
     try {
       setIsLoading(true);
-      console.log('Fetching homepage carousel items using direct SQL...');
 
       // Clear Supabase cache before fetching
       await clearSupabaseCache();
 
       if (forceRefresh) {
-        // Force a hard refresh by executing a direct SQL query
-        console.log('Forcing a hard refresh of carousel data...');
         await supabase.rpc('force_update_homepage');
       }
 
       // Use the dedicated carousel service with direct SQL
       const slides = await fetchActiveCarouselSlides();
-
-      console.log('Carousel items fetched successfully:', slides);
       setCarouselItems(slides);
     } catch (error) {
-      console.error('Error fetching carousel items:', error);
       // Fallback to empty array if there's an error
       setCarouselItems([]);
     } finally {
@@ -149,17 +143,14 @@ export const HomePage: React.FC = () => {
   const fetchHomepageSections = async () => {
     try {
       setIsSectionsLoading(true);
-      console.log('Fetching homepage sections...');
 
       // Clear Supabase cache before fetching
       await clearSupabaseCache();
 
       // Fetch homepage sections
       const sectionsData = await getHomepageData();
-      console.log('Homepage sections fetched successfully:', sectionsData);
       setSections(sectionsData);
     } catch (error) {
-      console.error('Error fetching homepage sections:', error);
       // Fallback to empty array if there's an error
       setSections([]);
     } finally {
@@ -174,7 +165,6 @@ export const HomePage: React.FC = () => {
 
     // Set up a refresh interval to periodically check for updates
     const refreshInterval = setInterval(() => {
-      console.log('Refreshing homepage data...');
       fetchCarouselItems();
       fetchHomepageSections();
     }, 60000); // Refresh every minute
@@ -187,10 +177,7 @@ export const HomePage: React.FC = () => {
   useEffect(() => {
     const checkPopupSettings = async () => {
       try {
-        console.log('Checking popup banner settings...');
-
         // Clear the popup closed state on page load to ensure it appears on refresh
-        // This is different from the original implementation which respected the closed state
         sessionStorage.removeItem('popupBannerClosed');
 
         const { data, error } = await supabase
@@ -201,21 +188,16 @@ export const HomePage: React.FC = () => {
 
         if (error) {
           if (error.code === 'PGRST116') { // No rows returned
-            console.log('No popup banner settings found, using default');
             setShowPopup(true);
-          } else {
-            console.error('Error fetching popup banner settings:', error);
           }
         } else if (data && data.setting_value) {
-          console.log('Popup banner settings found:', data.setting_value);
           setPopupSettings(data.setting_value);
           if (data.setting_value.is_enabled) {
-            console.log('Popup banner is enabled, showing popup');
             setShowPopup(true);
           }
         }
       } catch (error) {
-        console.error('Error checking popup banner settings:', error);
+        // Silently handle error
       }
     };
 
@@ -248,8 +230,7 @@ export const HomePage: React.FC = () => {
     setTimeout(() => setIsAnimating(false), 500);
   };
 
-  // Log when HomePage renders
-  console.log('HomePage rendering, including PopupBanner');
+
 
   return (
     <div>
@@ -263,7 +244,6 @@ export const HomePage: React.FC = () => {
             {/* Close button - positioned outside the banner */}
             <button
               onClick={() => {
-                console.log('Custom popup close button clicked');
                 setShowPopup(false);
                 sessionStorage.setItem('popupBannerClosed', 'true');
               }}

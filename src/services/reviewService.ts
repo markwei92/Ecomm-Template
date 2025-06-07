@@ -97,8 +97,6 @@ export const submitReview = async (
  * Get reviews for a specific product
  */
 export const getProductReviews = async (productId: string): Promise<Review[]> => {
-    console.log('Fetching reviews for product ID:', productId);
-
     try {
         // First, get all reviews with a simplified query
         const { data, error } = await supabase
@@ -110,17 +108,12 @@ export const getProductReviews = async (productId: string): Promise<Review[]> =>
             .order('created_at', { ascending: false });
 
         if (error) {
-            console.error('Error fetching product reviews:', error);
             throw error;
         }
 
         if (!data || data.length === 0) {
-            console.log(`No reviews found for product ${productId}`);
             return [];
         }
-
-        console.log(`Found ${data.length} reviews for product ${productId}`);
-        console.log('First review sample:', data[0]);
 
         // If we have reviews, fetch the user profiles separately
         if (data.length > 0) {
@@ -128,18 +121,13 @@ export const getProductReviews = async (productId: string): Promise<Review[]> =>
                 // Get unique user IDs
                 const userIds = [...new Set(data.map(review => review.user_id))];
 
-                console.log(`Fetching profiles for ${userIds.length} users:`, userIds);
-
                 // Fetch profiles for these users
                 const { data: profiles, error: profilesError } = await supabase
                     .from('profiles')
                     .select('id, first_name, last_name, email')
                     .in('id', userIds);
 
-                if (profilesError) {
-                    console.error('Error fetching user profiles:', profilesError);
-                } else if (profiles) {
-                    console.log(`Found ${profiles.length} user profiles`);
+                if (!profilesError && profiles) {
 
                     // Create a map of user_id to profile
                     const profileMap = profiles.reduce<Record<string, any>>((map, profile) => {
@@ -167,10 +155,9 @@ export const getProductReviews = async (productId: string): Promise<Review[]> =>
                         }
                     });
 
-                    console.log('Enhanced reviews with profiles:', data[0]);
                 }
             } catch (profileErr) {
-                console.error('Error enhancing reviews with profiles:', profileErr);
+                // Silently handle profile errors
             }
         }
 
@@ -203,15 +190,12 @@ export const getProductReviews = async (productId: string): Promise<Review[]> =>
 
                 return review;
             } catch (err) {
-                console.error('Error processing review:', err);
                 return review;
             }
         });
 
-        console.log(`Returning ${processedReviews.length} processed reviews for product ${productId}`);
         return processedReviews;
     } catch (err) {
-        console.error('Exception in getProductReviews:', err);
         return [];
     }
 };
