@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Facebook, Instagram, Mail } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { FooterSettings, fetchFooterSettings } from '../services/siteSettingsService';
 import { supabase } from '../lib/supabase';
 
 export const Footer: React.FC = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [settings, setSettings] = useState<FooterSettings>({
     copyright_text: '© {year} FunnyJokeTees.',
@@ -96,6 +96,12 @@ export const Footer: React.FC = () => {
 
   const currentYear = new Date().getFullYear();
 
+  // Function to handle navigation with scroll to top
+  const handleNavigation = (path: string) => {
+    navigate(path);
+    window.scrollTo(0, 0);
+  };
+
   return (
     <footer className="footer-themed pt-12 pb-6">
       <div className="w-full px-4 sm:px-6 lg:px-8">
@@ -105,19 +111,12 @@ export const Footer: React.FC = () => {
             <h3 className="text-lg font-bold mb-4">Customer Care</h3>
             <ul className="space-y-2">
               <li>
-                <Link to="/shipping" className="hover:opacity-80">
-                  Shipping & Delivery
-                </Link>
-              </li>
-              <li>
-                <Link to="/returns" className="hover:opacity-80">
-                  Returns & Exchanges
-                </Link>
-              </li>
-              <li>
-                <Link to="/contact" className="hover:opacity-80">
+                <button
+                  onClick={() => handleNavigation('/contact')}
+                  className="hover:opacity-80 text-left"
+                >
                   Contact Us
-                </Link>
+                </button>
               </li>
             </ul>
           </div>
@@ -127,24 +126,12 @@ export const Footer: React.FC = () => {
             <h3 className="text-lg font-bold mb-4">Quick Links</h3>
             <ul className="space-y-2">
               <li>
-                <Link to="/help" className="hover:opacity-80">
-                  Help Center
-                </Link>
-              </li>
-              <li>
-                <Link to="/track-order" className="hover:opacity-80">
-                  Track My Order
-                </Link>
-              </li>
-              <li>
-                <Link to="/return" className="hover:opacity-80">
-                  Start a Return
-                </Link>
-              </li>
-              <li>
-                <Link to="/reviews" className="hover:opacity-80">
-                  Reviews
-                </Link>
+                <button
+                  onClick={() => handleNavigation('/faq')}
+                  className="hover:opacity-80 text-left"
+                >
+                  FAQ
+                </button>
               </li>
             </ul>
           </div>
@@ -154,28 +141,29 @@ export const Footer: React.FC = () => {
             <h3 className="text-lg font-bold mb-4">About Us</h3>
             <ul className="space-y-2">
               <li>
-                <Link to="/privacy" className="hover:opacity-80">
+                <button
+                  onClick={() => handleNavigation('/privacy')}
+                  className="hover:opacity-80 text-left"
+                >
                   Privacy Policy
-                </Link>
+                </button>
               </li>
               <li>
-                <Link to="/terms" className="hover:opacity-80">
+                <button
+                  onClick={() => handleNavigation('/terms')}
+                  className="hover:opacity-80 text-left"
+                >
                   Terms of Service
-                </Link>
-              </li>
-              <li>
-                <Link to="/media" className="hover:opacity-80">
-                  Media Inquiries
-                </Link>
+                </button>
               </li>
             </ul>
           </div>
 
           {/* Subscribe Section */}
           <div>
-            <h3 className="text-lg font-bold mb-4">Subscribe</h3>
+            <h3 className="text-lg font-bold mb-4">Subscribe to our newsletter</h3>
             <p className="mb-4">
-              Sign up for free discounts and giveaways!
+              For more promos and updates!
             </p>
             <form onSubmit={handleSubmit} className="mb-4">
               <div className="flex flex-col space-y-2">
@@ -210,26 +198,6 @@ export const Footer: React.FC = () => {
                 <p className="mt-2 text-sm text-green-600">Thank you for subscribing!</p>
               )}
             </form>
-            <div className="flex space-x-4">
-              <a
-                href="https://facebook.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:opacity-80"
-                aria-label="Facebook"
-              >
-                <Facebook size={20} />
-              </a>
-              <a
-                href="https://instagram.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:opacity-80"
-                aria-label="Instagram"
-              >
-                <Instagram size={20} />
-              </a>
-            </div>
           </div>
         </div>
 

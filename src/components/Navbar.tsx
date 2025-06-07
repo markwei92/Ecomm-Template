@@ -21,7 +21,7 @@ export const Navbar: React.FC = () => {
   const [isCollectionsDropdownOpen, setIsCollectionsDropdownOpen] = useState(false);
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
+
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Product[]>([]);
@@ -562,31 +562,7 @@ export const Navbar: React.FC = () => {
                 </div>
               </div>
 
-              <Link
-                to="/contact"
-                className="hover:opacity-80 font-medium transition-colors duration-200 navbar-themed"
-              >
-                Contact Us
-              </Link>
-              <div className="relative">
-                <button
-                  onClick={() => setIsAdminMenuOpen(!isAdminMenuOpen)}
-                  className="hover:opacity-80 font-medium transition-colors duration-200 navbar-themed"
-                >
-                  Admin
-                </button>
-                {isAdminMenuOpen && (
-                  <div className="absolute left-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
-                    <Link
-                      to="/admin/login"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      onClick={() => setIsAdminMenuOpen(false)}
-                    >
-                      Admin Login
-                    </Link>
-                  </div>
-                )}
-              </div>
+
             </div>
 
             {/* Right Section - Utility Icons */}
@@ -843,16 +819,7 @@ export const Navbar: React.FC = () => {
                 </div>
               </div>
 
-              {/* Contact Us Link */}
-              <div>
-                <Link
-                  to="/contact"
-                  className="block text-base text-gray-900 hover:text-gray-600 hover:bg-gray-50 rounded-lg px-3 py-2 transition-colors duration-200"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Contact Us
-                </Link>
-              </div>
+
             </div>
           </nav>
         </div>

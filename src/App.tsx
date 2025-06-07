@@ -42,6 +42,9 @@ import { EditProduct } from './pages/admin/EditProduct';
 import { StoreFront } from './pages/admin/StoreFront';
 import { MailingList } from './pages/admin/MailingList';
 import { ReviewsList } from './pages/admin/ReviewsList';
+import FAQ from './pages/FAQ';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 
 
 // Component to conditionally render the footer
@@ -68,6 +71,9 @@ const AppLayout = () => {
             <Route path="/signup" element={<SignUpPage />} />
             <Route path="/account" element={<AccountPage />} />
             <Route path="/contact" element={<ContactPage />} />
+            <Route path="/faq" element={<FAQ />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsOfService />} />
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/checkout/success" element={<CheckoutSuccessPage />} />
             <Route path="/checkout/cancel" element={<CheckoutCancelPage />} />
