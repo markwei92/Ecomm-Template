@@ -86,7 +86,6 @@ export const AdminLayout: React.FC = () => {
     { path: '/admin/users', label: 'User Management', icon: Users },
     { path: '/admin/reviews', label: 'Reviews', icon: Star },
     { path: '/admin/settings', label: 'Settings', icon: SettingsIcon },
-    { path: '/order-diagnostic', label: 'Order Diagnostic', icon: AlertTriangle },
   ];
 
   return (

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
+import { validateLocalCoupon } from '../services/couponService';
 
 export const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || '');
 
@@ -46,9 +47,10 @@ export interface PromoCodeValidationResponse {
   discountType?: 'percentage' | 'fixed_amount';
   discountAmount?: number;
   message?: string;
+  couponId?: string;
 }
 
-// Function to validate a promo code
+// Function to validate a promo code using local database
 export async function validatePromoCode(code: string): Promise<PromoCodeValidationResponse> {
   if (!code || code.trim() === '') {
     return {
@@ -58,43 +60,10 @@ export async function validatePromoCode(code: string): Promise<PromoCodeValidati
   }
 
   try {
-    // For now, we'll use a simple validation approach
-    // In a real application, you would call your backend to validate the code
+    // Validate using local database
+    const result = await validateLocalCoupon(code.trim().toUpperCase());
 
-    // Simulate a backend call by checking against some predefined codes
-    // TEST10: 10% off
-    // TEST20: 20% off
-    // FLAT5: $5 off
-
-    const normalizedCode = code.trim().toUpperCase();
-
-    if (normalizedCode === 'TEST10') {
-      return {
-        valid: true,
-        discountType: 'percentage',
-        discountAmount: 10,
-        message: 'Promo code applied: 10% off'
-      };
-    } else if (normalizedCode === 'TEST20') {
-      return {
-        valid: true,
-        discountType: 'percentage',
-        discountAmount: 20,
-        message: 'Promo code applied: 20% off'
-      };
-    } else if (normalizedCode === 'FLAT5') {
-      return {
-        valid: true,
-        discountType: 'fixed_amount',
-        discountAmount: 5,
-        message: 'Promo code applied: $5 off'
-      };
-    }
-
-    return {
-      valid: false,
-      message: 'Invalid promo code'
-    };
+    return result;
   } catch (error: any) {
     console.error('Error validating promo code:', error);
     return {

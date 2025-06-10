@@ -4,6 +4,7 @@ import { ShoppingBag, CreditCard, Loader, ArrowLeft, Check, X, Plus, Minus, Tras
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { PaymentIntentResponse, validatePromoCode, createPaymentIntentWithFixedShipping } from '../lib/stripe';
+import { incrementCouponUsage } from '../services/couponService';
 import { toast } from 'react-toastify';
 import { supabase } from '../lib/supabase';
 import { createOrderFromPaymentIntent, debugStripeOrdersTable } from '../lib/orders';
@@ -27,6 +28,7 @@ export const CheckoutPage: React.FC = () => {
     type: '' as 'percentage' | 'fixed_amount' | '',
     amount: 0
   });
+  const [appliedCouponId, setAppliedCouponId] = useState<string | null>(null);
 
   useEffect(() => {
     if (state.items.length === 0) {
@@ -92,7 +94,11 @@ export const CheckoutPage: React.FC = () => {
           type: discountType,
           amount: result.discountAmount || 0
         });
-        console.log('Set discount to:', { type: discountType, amount: result.discountAmount || 0 });
+
+        // Store the coupon ID for usage tracking
+        setAppliedCouponId(result.couponId || null);
+
+        console.log('Set discount to:', { type: discountType, amount: result.discountAmount || 0, couponId: result.couponId });
 
         // Calculate and log the discount amount
         const calculatedDiscount = result.discountType === 'percentage'
@@ -109,6 +115,7 @@ export const CheckoutPage: React.FC = () => {
           type: '',
           amount: 0
         });
+        setAppliedCouponId(null);
         toast.error(result.message || 'Invalid promo code');
       }
     } catch (error: any) {
@@ -119,6 +126,7 @@ export const CheckoutPage: React.FC = () => {
         type: '',
         amount: 0
       });
+      setAppliedCouponId(null);
       toast.error(error.message || 'Failed to validate promo code');
     } finally {
       setIsValidatingPromo(false);
@@ -272,6 +280,17 @@ export const CheckoutPage: React.FC = () => {
   const handlePaymentSuccess = async (paymentIntentId: string) => {
     try {
       console.log('Payment successful, creating order for payment intent:', paymentIntentId);
+
+      // Increment coupon usage if a coupon was applied
+      if (promoCodeValid && appliedCouponId) {
+        console.log('Incrementing usage for coupon:', appliedCouponId);
+        const usageIncremented = await incrementCouponUsage(appliedCouponId);
+        if (usageIncremented) {
+          console.log('Successfully incremented coupon usage');
+        } else {
+          console.warn('Failed to increment coupon usage, but continuing with order creation');
+        }
+      }
 
       const items = state.items.map(item => ({
         title: item.title,
