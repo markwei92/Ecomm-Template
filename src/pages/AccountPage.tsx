@@ -729,9 +729,17 @@ export const AccountPage: React.FC = () => {
 
   const fetchAddresses = async () => {
     try {
+      // Get current user
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        console.error('No authenticated user found for addresses');
+        return;
+      }
+
       const { data: addresses, error } = await supabase
-        .from('addresses')
+        .from('user_addresses')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -910,7 +918,7 @@ export const AccountPage: React.FC = () => {
         if (!user) throw new Error('No authenticated user');
 
         const { data, error } = await supabase
-          .from('addresses')
+          .from('user_addresses')
           .insert({
             user_id: user.id,
             street: newAddress.street,
@@ -956,7 +964,7 @@ export const AccountPage: React.FC = () => {
   const handleDeleteAddress = async (addressId: string) => {
     try {
       const { error } = await supabase
-        .from('addresses')
+        .from('user_addresses')
         .delete()
         .eq('id', addressId);
 
@@ -970,15 +978,20 @@ export const AccountPage: React.FC = () => {
 
   const handleSetDefaultAddress = async (addressId: string) => {
     try {
-      // Update all addresses to not be default
+      // Get current user
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) throw new Error('No authenticated user');
+
+      // Update all addresses to not be default for this user
       await supabase
-        .from('addresses')
+        .from('user_addresses')
         .update({ is_default: false })
+        .eq('user_id', user.id)
         .neq('id', addressId);
 
       // Set the selected address as default
       const { error } = await supabase
-        .from('addresses')
+        .from('user_addresses')
         .update({ is_default: true })
         .eq('id', addressId);
 
@@ -1178,21 +1191,7 @@ export const AccountPage: React.FC = () => {
         productImage={reviewProductImage}
         onReviewSubmitted={handleReviewSubmitted}
       />
-      <div className="flex justify-between mb-8">
-        {/* TEMPORARY: Admin Access Button */}
-        <div className="flex items-center">
-          <button
-            onClick={() => navigate('/admin-access')}
-            className="flex items-center px-4 py-2 text-sm font-medium text-white bg-black border border-gray-300 rounded-md hover:bg-gray-800"
-          >
-            <User className="w-4 h-4 mr-2" />
-            Access Admin Dashboard
-          </button>
-          <div className="ml-2 text-xs text-gray-500">
-            (Temporary access while admin login is being fixed)
-          </div>
-        </div>
-
+      <div className="flex justify-end mb-8">
         <button
           onClick={handleSignOut}
           className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"

@@ -109,8 +109,31 @@ export const Navbar: React.FC = () => {
     setIsCartOpen(!isCartOpen);
   }, [isCartOpen]);
 
-  const handleUserIconClick = () => {
+  const handleUserIconClick = async () => {
     if (user) {
+      // Check if user is an admin
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (!sessionError && session) {
+          // User has a Supabase session, check if they're an admin
+          const { data: adminCheck, error: adminError } = await supabase
+            .from('admin_users')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .single();
+
+          if (!adminError && adminCheck) {
+            // User is an admin, redirect to admin dashboard
+            navigate('/admin/products');
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+      }
+
+      // User is not an admin or error occurred, go to regular account page
       navigate('/account');
     } else {
       setIsAuthDialogOpen(true);

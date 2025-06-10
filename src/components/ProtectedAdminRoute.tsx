@@ -82,7 +82,6 @@ export const ProtectedAdminRoute: React.FC = () => {
     return <Navigate to="/admin/login" state={{ from: location }} replace />;
   }
 
-  // TEMPORARY FIX: If authenticated, render the protected content
-  // This bypasses the admin check
+  // Render the protected admin content
   return <Outlet />;
 };

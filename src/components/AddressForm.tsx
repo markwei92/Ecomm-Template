@@ -286,9 +286,12 @@ export const AddressForm: React.FC = () => {
             <div key={address.id} className={`border ${address.is_default ? 'border-gray-300' : 'border-gray-200'} rounded-md p-6 ${isEditing && currentAddress.id === address.id ? 'hidden' : ''}`}>
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="font-medium text-gray-900">{address.is_default && <span className="text-xs bg-gray-100 px-2 py-1 rounded-md mr-2">Default</span>} {address.street}</p>
+                  <p className="font-medium text-gray-900">{address.street}</p>
                   <p className="text-sm text-gray-600">{address.city}, {address.state} {address.postal_code}</p>
                   <p className="text-sm text-gray-600">{address.country}</p>
+                  {address.is_default && (
+                    <span className="inline-block text-xs bg-gray-100 px-2 py-1 rounded-md mt-2">Default</span>
+                  )}
                 </div>
                 <div className="flex space-x-4">
                   <button
